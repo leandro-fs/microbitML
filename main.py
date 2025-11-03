@@ -8,6 +8,9 @@ from microbitml import pkt
 # Version identifier displayed at startup
 version_token = "pct"
 
+# Configuration persistence file
+CONFIG_FILE = 'config.cfg'
+
 # Maximum message bus number (single digit to avoid scrolling)
 message_bus_max = 9  # min is 0, one digit avoids scrolling
 
@@ -56,6 +59,43 @@ def error_handler(halt=False, error_code=0, description="desc"):
         sleep(2000)
         if not halt:
             break
+
+
+def load_config():
+    """
+    Load configuration dictionary from file using eval()
+    """
+    global current_role, message_bus
+    try:
+        # Try to open file and evaluate content as dictionary
+        with open(CONFIG_FILE, 'r') as f:
+            config = eval(f.read())
+        current_role = config['current_role']
+        message_bus = config['message_bus']
+        print("Loaded config:", config)
+    except:
+        # If file doesn't exist or error occurs, use default values
+        current_role = role_list[0]
+        message_bus = 0
+        print("Using default config")
+
+
+def save_config():
+    """
+    Save configuration dictionary to file using repr()
+    """
+    try:
+        # Convert dictionary to string with repr() and save it
+        config = {
+            'current_role': current_role,
+            'message_bus': message_bus
+        }
+        with open(CONFIG_FILE, 'w') as f:
+            f.write(repr(config))
+        print("Saved config:", config)
+    except Exception as e:
+        # If something fails, show error via serial console
+        print("Save error:", e)
 
 
 class PerceptronModel():
@@ -200,6 +240,7 @@ def button_a_was_pressed(config_adjust):
         else:
             current_role = role_list[0]
         pin_logo_is_touched()
+        save_config()  # Save new configuration
         print("INFO:button_a_was_pressed({}),prevRole:{},newRole:{}".format(config_adjust, previous_role, current_role))
     else:
         #display.show("a")
@@ -222,6 +263,7 @@ def button_b_was_pressed(config_adjust):
         if message_bus > message_bus_max:
             message_bus = 0
         pin_logo_is_touched()
+        save_config()  # Save new configuration
         print("INFO:button_b_was_pressed({}),newbus:{}".format(config_adjust, message_bus))
     else:
         #display.show("b")
@@ -269,6 +311,7 @@ def pin_logo_is_touched():
 # Main program execution
 if __name__ == "__main__":
     display.scroll(version_token)
+    load_config()  # Load saved configuration
     packet_input = pkt()
     packet_output = pkt()
     radio.on()

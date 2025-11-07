@@ -80,8 +80,10 @@ class PerceptronModel():
             self.packet_input = packet_input
             self.packet_output = packet_output
             self.output_threshold = 7
-            # CORRECCION: Fijar el rol en el packet para evitar usar current_role global
+            # Fijar el rol y bus en ambos packets para evitar usar globals
             self.packet_output.fixed_role = role
+            self.packet_output.fixed_bus = message_bus
+            self.packet_input.fixed_bus = message_bus
         else:
             error_handler(halt=True, error_code=1, description="FATAL:unexisting role {}".format(role))
             

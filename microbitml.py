@@ -9,15 +9,17 @@ class RadioPacket():
     
     def __init__(self):
         self.fixed_role = None  # Rol fijo, si se asigna
+        self.fixed_bus = None   # Bus fijo, si se asigna
     
     def encode(self, payload):
         from main import version_token, message_bus, current_role
         
-        # CORRECCION: Usar rol fijo si existe, sino usar current_role global
+        # CORRECCION: Usar valores fijos si existen, sino usar globals
         sender_role = self.fixed_role if self.fixed_role else current_role
+        sender_bus = self.fixed_bus if self.fixed_bus is not None else message_bus
         
         encoded_message = version_token + ","
-        encoded_message += "{},".format(message_bus)
+        encoded_message += "{},".format(sender_bus)
         encoded_message += "{},".format(sender_role)
         encoded_message += str(payload).replace(",", "_coma_")
         
@@ -30,6 +32,9 @@ class RadioPacket():
         status_description = ""
         sender_role = ""
         decoded_payload = ""
+        
+        # CORRECCION: Usar bus fijo si existe
+        expected_bus = self.fixed_bus if self.fixed_bus is not None else message_bus
         
         message_parts = received_message.split(",")
         
@@ -45,9 +50,9 @@ class RadioPacket():
             
             # Validar bus
             received_bus = message_parts[1]
-            if received_bus != str(message_bus):
+            if received_bus != str(expected_bus):
                 status_description = "parts[message_bus]:{}, expected:{}".format(
-                    received_bus, str(message_bus)
+                    received_bus, str(expected_bus)
                 )
                 raise ValueError
             

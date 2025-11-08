@@ -45,7 +45,8 @@ class RadioPacket():
                 status_description = "parts[version_token]={}, expected:{}".format(
                     received_version, version_token
                 )
-                error_handler(halt=False, error_code=9, description=status_description)
+                #error_handler(halt=False, error_code=9, description=status_description)
+                print("DEBUG: packet ignored, {}".format(status_description))
                 raise ValueError
             
             # Validar bus

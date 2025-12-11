@@ -6,7 +6,7 @@ por [Tomate Ruso](xxx@gmail), CNBA 2do 13
 
 # Descripción
 
-Clásico juego de la viborita, o los "lightcycles" de [TRON](https://es.wikipedia.org/wiki/Tron).
+Clásico juego de la viborita, o los "lightcycles" de [TRON](https://es.wikipedia.org/wiki/Tron), MULTIJUGADOR.
 Si no te divertís con ésto, GAME OVER :)
 
 Escrito en Python para [BBC micro:bit](https://www.microbit.org/) durante el [curso de Robótica](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica), por iniciativa de Tomate Ruso. Está actualmente en constante evolución, para incorporar temas de Programación y Electrónica, por lo que se recomienda revisar  seguido éste repo. 
@@ -15,10 +15,8 @@ Escrito en Python para [BBC micro:bit](https://www.microbit.org/) durante el [cu
 
 # Instalación
 
-- copiar el código desde:
-	- https://raw.githubusercontent.com/INFOCNBA/snake/refs/heads/main/main.py
-- pegarlo en:
-	- https://python.microbit.org
+- copiar el código  de main.py y microbitml.py
+    - pegarlos en https://python.microbit.org  (con cuidado de crear los archivos correspondientes en el editor
 - ahí puede emularse o bajar al hardware de la forma habitual
 
 

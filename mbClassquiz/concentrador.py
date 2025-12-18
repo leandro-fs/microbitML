@@ -1,329 +1,251 @@
-# concentrador.py - Micro:bit Concentrador (FIXED DEBUG)
-
 from microbit import *
-import radio
+import radio, machine
+from microbitcore import RadioMessage
 
-# === CONFIGURACION RADIO ===
-radio.config(channel=7, power=6, length=64, queue=10)
+CANAL_PUBLICO = 80
+
+device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
+
+lideres_por_grupo = {}
+votantes_sin_lider = {}
+
+msg = RadioMessage(format="command", device_id=device_id)
+
+canal_actual = None
+
+
+def switch_canal(canal):
+    global canal_actual
+    canal_int = int(canal)
+    if canal_actual != canal_int:
+        radio.config(channel=canal_int)
+        canal_actual = canal_int
+
+
+def enviar_json(datos):
+    tipo = datos.get('type', '')
+    
+    if tipo == 'device_registered':
+        uart.write('{{"type":"device_registered","device_id":"{}","role":"{}","group":{}}}\n'.format(
+            datos.get('device_id'),
+            datos.get('role'),
+            datos.get('group')
+        ))
+    
+    elif tipo == 'answer':
+        uart.write('{{"type":"answer","device_id":"{}","answer":"{}","source":"{}","group":{}}}\n'.format(
+            datos.get('device_id'),
+            datos.get('answer'),
+            datos.get('source'),
+            datos.get('group')
+        ))
+    
+    elif tipo == 'discovery_complete':
+        uart.write('{{"type":"discovery_complete","lideres":{},"votantes":{}}}\n'.format(
+            datos.get('lideres'),
+            datos.get('votantes')
+        ))
+    
+    elif tipo == 'error':
+        uart.write('{{"type":"error","msg":"{}"}}\n'.format(datos.get('msg')))
+    
+    elif tipo == 'debug':
+        uart.write('{{"type":"debug","msg":"{}"}}\n'.format(datos.get('msg')))
+
+
+def discovery_completo():
+    display.show('R')
+    global lideres_por_grupo, votantes_sin_lider
+    lideres_por_grupo = {}
+    votantes_sin_lider = {}
+    
+    # Discovery por canales privados (grupos 1-20)
+    for grupo in range(1, 21):
+        switch_canal(grupo)
+        radio.send(msg.cmd_report())
+        sleep(100)
+        
+        tiempo_limite = running_time() + 2000
+        while running_time() < tiempo_limite:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ID_LIDER":
+                    data = decoded.get('d')
+                    if data:
+                        partes = data.split(':')
+                        if len(partes) >= 2 and int(partes[0]) == grupo:
+                            lideres_por_grupo[grupo] = partes[1]
+                            radio.send(msg.cmd_ack(partes[1]))
+                            enviar_json({
+                                'type': 'device_registered',
+                                'device_id': partes[1],
+                                'role': 'lider',
+                                'group': grupo
+                            })
+            sleep(10)
+    
+    # Discovery en canal público (votantes sin líder)
+    switch_canal(CANAL_PUBLICO)
+    radio.send(msg.cmd_report())
+    sleep(100)
+    
+    tiempo_limite = running_time() + 3000
+    while running_time() < tiempo_limite:
+        rx = radio.receive()
+        if rx:
+            decoded = msg.decode(rx)
+            if decoded['t'] == "ID_VOTANTE":
+                data = decoded.get('d')
+                if data:
+                    partes = data.split(':')
+                    if len(partes) >= 3:
+                        grupo_id = int(partes[0])
+                        role = partes[1]
+                        disp_id = partes[2]
+                        
+                        if grupo_id not in lideres_por_grupo and disp_id not in votantes_sin_lider:
+                            votantes_sin_lider[disp_id] = {'role': role, 'group': grupo_id}
+                            radio.send(msg.cmd_ack(disp_id))
+                            enviar_json({
+                                'type': 'device_registered',
+                                'device_id': disp_id,
+                                'role': role,
+                                'group': grupo_id
+                            })
+        sleep(10)
+    
+    enviar_json({
+        'type': 'discovery_complete',
+        'lideres': len(lideres_por_grupo),
+        'votantes': len(votantes_sin_lider)
+    })
+    display.clear()
+
+
+def polling_respuestas():
+    display.show('P')
+    
+    # Polling a líderes
+    for grupo, lider_id in lideres_por_grupo.items():
+        switch_canal(grupo)
+        radio.send(msg.cmd_poll(lider_id))
+        sleep(50)
+        
+        switch_canal(CANAL_PUBLICO)
+        tiempo_limite = running_time() + 6000
+        encontrado = False
+        
+        while running_time() < tiempo_limite and not encontrado:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ANSWER":
+                    disp_id, answer = msg.extract_answer(rx)
+                    if disp_id == lider_id:
+                        enviar_json({
+                            'type': 'answer',
+                            'device_id': disp_id,
+                            'answer': answer[0] if answer else '',
+                            'source': 'lider',
+                            'group': grupo
+                        })
+                        encontrado = True
+            sleep(10)
+    
+    # Polling a votantes sin líder
+    for disp_id, info in votantes_sin_lider.items():
+        radio.send(msg.cmd_poll(disp_id))
+        sleep(50)
+        
+        tiempo_limite = running_time() + 3000
+        encontrado = False
+        
+        while running_time() < tiempo_limite and not encontrado:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ANSWER":
+                    d_id, ans = msg.extract_answer(rx)
+                    if d_id == disp_id:
+                        enviar_json({
+                            'type': 'answer',
+                            'device_id': d_id,
+                            'answer': ans[0] if ans else '',
+                            'source': 'votante',
+                            'group': info['group']
+                        })
+                        encontrado = True
+            sleep(10)
+    
+    display.clear()
+
+
+def procesar_usb(linea):
+    if 'question_params' in linea:
+        display.show('Q')
+        
+        tipo = 'unica'
+        num_opciones = 4
+        
+        if 'multiple' in linea:
+            tipo = 'multiple'
+        if '2' in linea:
+            num_opciones = 2
+        elif '3' in linea:
+            num_opciones = 3
+        
+        mensaje = msg.cmd_qparams(tipo, num_opciones)
+        
+        # Enviar a canal público
+        switch_canal(CANAL_PUBLICO)
+        radio.send(mensaje)
+        
+        # Enviar a todos los canales privados
+        for grupo in range(1, 21):
+            switch_canal(grupo)
+            radio.send(mensaje)
+        
+        switch_canal(CANAL_PUBLICO)
+        display.clear()
+    
+    elif 'start_poll' in linea:
+        polling_respuestas()
+    
+    elif 'discovery' in linea:
+        discovery_completo()
+    
+    elif 'list_devices' in linea:
+        enviar_json({
+            'type': 'debug',
+            'msg': 'L:' + str(len(lideres_por_grupo)) + ' V:' + str(len(votantes_sin_lider))
+        })
+
+
 radio.on()
-
-# === CONFIGURACION UART ===
+radio.config(power=6, length=64, queue=10)
 uart.init(baudrate=115200)
 
-# === ALMACENAMIENTO ===
-dispositivos_registrados = set()
-polling_activo = False
-CONFIG_FILE = 'devices.cfg'
+switch_canal(CANAL_PUBLICO)
 
-
-def enviar_por_usb(mensaje):
-    """Envia mensaje JSON por puerto serie USB"""
-    print(mensaje)
-    uart.write(mensaje + "\n")
-
-
-def cargar_dispositivos():
-    """Carga lista de dispositivos desde archivo"""
-    global dispositivos_registrados
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            dispositivos_registrados = set(eval(f.read()))
-        enviar_por_usb('{{"type":"debug","msg":"Dispositivos_cargados:{}"}}'.format(len(dispositivos_registrados)))
-    except:
-        dispositivos_registrados = set()
-        enviar_por_usb('{"type":"debug","msg":"Sin_dispositivos_previos"}')
-
-
-def guardar_dispositivos():
-    """Guarda lista de dispositivos en archivo"""
-    try:
-        with open(CONFIG_FILE, 'w') as f:
-            f.write(repr(list(dispositivos_registrados)))
-        enviar_por_usb('{"type":"debug","msg":"Dispositivos_guardados_OK"}')
-    except Exception as e:
-        enviar_por_usb('{{"type":"debug","msg":"Error_guardando:{}"}}'.format(str(e)))
-
-
-def descubrimiento():
-    """Proceso de descubrimiento de dispositivos"""
-    enviar_por_usb('{"type":"debug","msg":"=== INICIO_DESCUBRIMIENTO ==="}')
-    display.show(Image.HEART)
-    dispositivos_registrados.clear()
-    
-    enviar_por_usb('{"type":"discovery_start"}')
-    
-    # 6 rondas de REPORT en 12 segundos
-    for ronda in range(6):
-        enviar_por_usb('{{"type":"debug","msg":"Enviando_REPORT_ronda_{}"}}'.format(ronda + 1))
-        radio.send("REPORT")
-        enviar_por_usb('{{"type":"debug","msg":"REPORT_enviado_ronda_{}"}}'.format(ronda + 1))
-        
-        # Procesar respuestas durante 2 segundos
-        tiempo_inicio = running_time()
-        enviar_por_usb('{{"type":"debug","msg":"Escuchando_2s_ronda_{}"}}'.format(ronda + 1))
-        
-        while running_time() - tiempo_inicio < 2000:
-            mensaje = radio.receive()
-            if mensaje:
-                enviar_por_usb('{{"type":"debug","msg":"RX_radio:{}"}}'.format(mensaje))
-                if mensaje.startswith("ID:"):
-                    procesar_id_dispositivo(mensaje)
-            sleep(10)
-        
-        enviar_por_usb('{{"type":"debug","msg":"Fin_escucha_ronda_{}"}}'.format(ronda + 1))
-    
-    # Enviar lista completa por USB
-    lista_ids = list(dispositivos_registrados)
-    enviar_por_usb('{{"type":"debug","msg":"Preparando_device_list:{}_dispositivos"}}'.format(len(lista_ids)))
-    
-    json_devices = '{"type":"device_list","devices":['
-    for i, dev_id in enumerate(lista_ids):
-        json_devices += '"{}"'.format(dev_id)
-        if i < len(lista_ids) - 1:
-            json_devices += ','
-    json_devices += ']}'
-    enviar_por_usb(json_devices)
-    
-    # Guardar en archivo
-    guardar_dispositivos()
-    
-    # Enviar mensaje de fin
-    enviar_por_usb('{{"type":"discovery_end","total":{}}}'.format(len(dispositivos_registrados)))
-    
-    enviar_por_usb('{"type":"debug","msg":"=== FIN_DESCUBRIMIENTO ==="}')
-    display.show(len(dispositivos_registrados))
-    sleep(2000)
-    display.clear()
-
-
-def procesar_id_dispositivo(mensaje):
-    """Procesa mensaje ID de estudiante"""
-    device_id = mensaje[3:]
-    enviar_por_usb('{{"type":"debug","msg":"Procesando_ID:{}"}}'.format(device_id[:8]))
-    
-    if device_id not in dispositivos_registrados:
-        enviar_por_usb('{{"type":"debug","msg":"Nuevo_dispositivo:{}"}}'.format(device_id[:8]))
-        dispositivos_registrados.add(device_id)
-        
-        enviar_por_usb('{{"type":"debug","msg":"Enviando_ACK_a:{}"}}'.format(device_id[:8]))
-        radio.send("ACK:" + device_id)
-        
-        # Notificar por USB
-        enviar_por_usb('{{"type":"new_device","device_id":"{}"}}'.format(device_id))
-        display.scroll(len(dispositivos_registrados), delay=60)
-    else:
-        enviar_por_usb('{{"type":"debug","msg":"Dispositivo_ya_registrado:{}"}}'.format(device_id[:8]))
-
-
-def broadcast_qparams(tipo_pregunta, num_opciones):
-    """Envia parametros de pregunta por radio"""
-    enviar_por_usb('{"type":"debug","msg":"=== BROADCAST_QPARAMS ==="}')
-    
-    mensaje = "QPARAMS:{}:{}".format(tipo_pregunta, num_opciones)
-    enviar_por_usb('{{"type":"debug","msg":"TX_radio:{}"}}'.format(mensaje))
-    
-    # Enviar por radio
-    radio.send(mensaje)
-    enviar_por_usb('{"type":"debug","msg":"QPARAMS_enviado_por_radio"}')
-    
-    # Notificar al proxy
-    enviar_por_usb('{{"type":"qparams_sent","q_type":"{}","num_options":{}}}'.format(
-        tipo_pregunta, num_opciones
-    ))
-    
-    # Dar tiempo para procesamiento
-    sleep(500)
-    
-    display.show(Image.ARROW_E)
-    sleep(200)
-    display.clear()
-    enviar_por_usb('{"type":"debug","msg":"=== FIN_BROADCAST_QPARAMS ==="}')
-
-
-def hacer_polling():
-    """Polling secuencial de todos los dispositivos"""
-    global polling_activo
-    polling_activo = True
-    
-    enviar_por_usb('{"type":"debug","msg":"=== INICIO_POLLING ==="}')
-    display.show(Image.ASLEEP)
-    
-    lista_dispositivos = list(dispositivos_registrados)
-    enviar_por_usb('{{"type":"debug","msg":"Polling_de_{}_dispositivos"}}'.format(len(lista_dispositivos)))
-    
-    for idx, device_id in enumerate(lista_dispositivos):
-        enviar_por_usb('{{"type":"debug","msg":"Polling_dispositivo_{}_de_{}"}}'.format(
-            idx + 1, len(lista_dispositivos)
-        ))
-        
-        # Mostrar progreso
-        display.show(str(idx + 1))
-        
-        respuesta_recibida = None
-        intentos = 0
-        
-        # Hasta 2 intentos
-        while intentos < 2 and respuesta_recibida is None:
-            enviar_por_usb('{{"type":"debug","msg":"TX_POLL_intento_{}"}}'.format(intentos + 1))
-            
-            radio.send("POLL:" + device_id)
-            enviar_por_usb('{{"type":"debug","msg":"POLL_enviado"}}'.format(device_id[:8]))
-            
-            # Esperar respuesta 500ms
-            tiempo_inicio = running_time()
-            while running_time() - tiempo_inicio < 500:
-                mensaje = radio.receive()
-                if mensaje:
-                    enviar_por_usb('{{"type":"debug","msg":"RX_radio:{}"}}'.format(mensaje))
-                    
-                    if mensaje.startswith("ANSWER:"):
-                        partes = mensaje.split(':', 2)
-                        if len(partes) >= 2 and partes[1] == device_id:
-                            respuesta_recibida = partes[2] if len(partes) == 3 else ""
-                            enviar_por_usb('{{"type":"debug","msg":"ANSWER_OK:{}"}}'.format(respuesta_recibida))
-                            break
-                sleep(10)
-            
-            if respuesta_recibida is None:
-                enviar_por_usb('{{"type":"debug","msg":"Sin_respuesta_intento_{}"}}'.format(intentos + 1))
-            
-            intentos += 1
-        
-        # Si no hubo respuesta, enviar vacio
-        if respuesta_recibida is None:
-            respuesta_recibida = ""
-            enviar_por_usb('{"type":"debug","msg":"Enviando_respuesta_vacia"}')
-        
-        # Enviar por USB
-        json_str = '{{"type":"answer","device_id":"{}","answer":"{}"}}'.format(
-            device_id, respuesta_recibida
-        )
-        enviar_por_usb(json_str)
-    
-    # Polling completo
-    enviar_por_usb('{"type":"polling_complete"}')
-    enviar_por_usb('{"type":"debug","msg":"=== FIN_POLLING ==="}')
-    
-    polling_activo = False
-    
-    display.show(Image.HAPPY)
-    sleep(1000)
-    display.clear()
-
-
-def verificar_estado():
-    """Verifica estado de dispositivos con PING"""
-    enviar_por_usb('{"type":"debug","msg":"=== VERIFICACION_ESTADO ==="}')
-    display.show(Image.GHOST)
-    
-    for device_id in list(dispositivos_registrados):
-        enviar_por_usb('{{"type":"debug","msg":"TX_PING"}')
-        radio.send("PING:" + device_id)
-        
-        # Esperar PONG 1 segundo
-        tiempo_inicio = running_time()
-        recibio_pong = False
-        
-        while running_time() - tiempo_inicio < 1000:
-            mensaje = radio.receive()
-            if mensaje:
-                enviar_por_usb('{{"type":"debug","msg":"RX_radio:{}"}}'.format(mensaje))
-                if mensaje == "PONG:" + device_id:
-                    recibio_pong = True
-                    break
-            sleep(10)
-        
-        # Enviar estado por USB
-        estado = "online" if recibio_pong else "offline"
-        json_str = '{{"type":"ping_result","device_id":"{}","status":"{}"}}'.format(
-            device_id, estado
-        )
-        enviar_por_usb(json_str)
-    
-    enviar_por_usb('{"type":"debug","msg":"=== FIN_VERIFICACION ==="}')
-    display.clear()
-
-
-def procesar_comando_usb(linea):
-    """Procesa comandos JSON desde USB"""
-    # NO meter el JSON recibido dentro de otro JSON - causa problemas de parsing
-    enviar_por_usb('{"type":"debug","msg":"CMD_USB_recibido"}')
-    
-    try:
-        linea = linea.strip()
-        if not linea:
-            enviar_por_usb('{"type":"debug","msg":"Linea_vacia_ignorada"}')
-            return
-        
-        # Parse manual de JSON - buscar patrones (con o sin espacios)
-        if 'question_params' in linea:
-            enviar_por_usb('{"type":"debug","msg":"Detectado:question_params"}')
-            
-            # Extraer tipo
-            tipo = "unica"
-            if 'multiple' in linea:
-                tipo = "multiple"
-            
-            # Extraer num_opciones
-            num = 4
-            if '2' in linea:
-                num = 2
-            elif '3' in linea:
-                num = 3
-            elif '4' in linea:
-                num = 4
-            
-            enviar_por_usb('{{"type":"debug","msg":"Parseado_tipo:{}_opciones:{}"}}'.format(tipo, num))
-            broadcast_qparams(tipo, num)
-        
-        elif 'start_poll' in linea:
-            enviar_por_usb('{"type":"debug","msg":"Detectado:start_poll"}')
-            hacer_polling()
-        
-        else:
-            enviar_por_usb('{"type":"debug","msg":"Comando_no_reconocido"}')
-    
-    except Exception as e:
-        enviar_por_usb('{{"type":"error","msg":"{}"}}'.format(str(e)))
-
-
-def leer_usb():
-    """Lee lineas desde USB si hay datos disponibles"""
-    if uart.any():
-        try:
-            linea = uart.readline()
-            if linea:
-                linea = linea.decode('utf-8').strip()
-                if linea:
-                    procesar_comando_usb(linea)
-        except Exception as e:
-            enviar_por_usb('{{"type":"debug","msg":"Error_leyendo_USB:{}"}}'.format(str(e)))
-
-
-# === INICIO ===
-enviar_por_usb('{"type":"debug","msg":"=== CONCENTRADOR_INICIADO ==="}')
-display.show(Image.HAPPY)
-sleep(1000)
+display.show('C')
+sleep(800)
 display.clear()
 
-cargar_dispositivos()
-enviar_por_usb('{"type":"debug","msg":"Sistema_listo"}')
+enviar_json({'type': 'debug', 'msg': 'Ready:' + device_id[:8]})
 
-# === LOOP PRINCIPAL ===
 while True:
-    # Solo procesar botones si NO estamos en polling
-    if not polling_activo:
-        # Boton A: Descubrimiento
-        if button_a.was_pressed():
-            enviar_por_usb('{"type":"debug","msg":"Boton_A_presionado"}')
-            descubrimiento()
-        
-        # Boton B: Verificar estado
-        if button_b.was_pressed():
-            enviar_por_usb('{"type":"debug","msg":"Boton_B_presionado"}')
-            verificar_estado()
+    if button_a.was_pressed():
+        discovery_completo()
     
-    # Leer comandos USB
-    leer_usb()
+    if uart.any():
+        linea = uart.readline()
+        if linea:
+            try:
+                linea_str = linea.decode().strip()
+                if linea_str:
+                    procesar_usb(linea_str)
+            except:
+                pass
     
     sleep(50)

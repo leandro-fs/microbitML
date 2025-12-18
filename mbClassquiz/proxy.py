@@ -97,44 +97,51 @@ def procesar_mensaje_usb(linea):
         print(f"[USB] Tipo detectado: '{tipo}'")
         print(f"[USB] Data completa: {data}")
         
-        if tipo == 'discovery_start':
-            print("\n[Descubrimiento] Iniciando...")
-        
-        elif tipo == 'debug':
+        if tipo == 'debug':
             print(f"[Debug-Concentrador] {data.get('msg')}")
         
-        elif tipo == 'new_device':
-            print(f"[Descubrimiento] Nuevo: {data['device_id'][:8]}")
+        elif tipo == 'device_registered':
+            device_id = data.get('device_id')
+            role = data.get('role')
+            group = data.get('group')
+            print(f"[Descubrimiento] {role} G{group}: {device_id[:8]}")
+            
+            # Acumular para registrar despues
+            if device_id not in dispositivos:
+                dispositivos[device_id] = {
+                    'pendiente': True,
+                    'role': role,
+                    'group': group
+                }
         
-        elif tipo == 'device_list':
-            registrar_dispositivos(data['devices'])
-        
-        elif tipo == 'discovery_end':
-            print(f"[Descubrimiento] Completo: {data['total']} dispositivos\n")
-        
-        elif tipo == 'qparams_sent':
-            print(f"[QPARAMS] Concentrador envió: tipo={data.get('q_type')}, opciones={data.get('num_options')}")
+        elif tipo == 'discovery_complete':
+            total_lideres = data.get('lideres', 0)
+            total_votantes = data.get('votantes', 0)
+            print(f"\n[Descubrimiento] Completo: {total_lideres} lideres, {total_votantes} votantes")
+            
+            # Registrar todos los dispositivos acumulados
+            ids_pendientes = [d for d in dispositivos.keys() if dispositivos[d].get('pendiente')]
+            if ids_pendientes:
+                registrar_dispositivos(ids_pendientes)
+            else:
+                print("[Warning] No hay dispositivos pendientes para registrar")
         
         elif tipo == 'answer':
             device_id = data.get('device_id')
             answer = data.get('answer')
-            print(f"[ANSWER] Recibido de {device_id[:8]}: '{answer}'")
+            source = data.get('source', 'unknown')
+            group = data.get('group', 0)
+            print(f"[ANSWER] G{group} ({source}): {device_id[:8]} → '{answer}'")
             procesar_respuesta(device_id, answer)
         
-        elif tipo == 'polling_complete':
-            print("[Polling] Completo\n")
-        
-        elif tipo == 'ping_result':
-            device_id = data['device_id']
-            status = data['status']
-            nombre = dispositivos.get(device_id, {}).get('nombre', device_id[:8])
-            print(f"[Ping] {nombre}: {status}")
+        elif tipo == 'error':
+            print(f"[Error-Concentrador] {data.get('msg')}")
         
         else:
             print(f"[USB] Mensaje no reconocido: {data}")
     
     except json.JSONDecodeError as e:
-        print(f"[USB] JSON INVÁLIDO: {linea}")
+        print(f"[USB] JSON INVALIDO: {linea}")
         print(f"[USB] Error: {e}")
     except Exception as e:
         print(f"[USB] Error procesando: {e}")
@@ -151,23 +158,29 @@ def registrar_dispositivos(lista_ids):
     print(f"\n[Registro] {len(lista_ids)} dispositivos detectados")
     
     for device_id in lista_ids:
-        if device_id not in dispositivos:
-            nombre = f"{choice(NOMBRES_RANDOM)}_{device_id[-4:]}"
-            
-            cliente = socketio.Client()
-            configurar_cliente_socketio(cliente, nombre, device_id)
-            
-            dispositivos[device_id] = {
-                "nombre": nombre,
-                "cliente": cliente,
-                "conectado": False
-            }
-            
-            threading.Thread(
-                target=conectar_cliente,
-                args=(device_id,),
-                daemon=True
-            ).start()
+        info = dispositivos.get(device_id, {})
+        role = info.get('role', 'unknown')
+        group = info.get('group', 0)
+        
+        nombre = f"{choice(NOMBRES_RANDOM)}_{role}G{group}"
+        
+        cliente = socketio.Client()
+        configurar_cliente_socketio(cliente, nombre, device_id)
+        
+        dispositivos[device_id] = {
+            "nombre": nombre,
+            "cliente": cliente,
+            "conectado": False,
+            "role": role,
+            "group": group,
+            "pendiente": False
+        }
+        
+        threading.Thread(
+            target=conectar_cliente,
+            args=(device_id,),
+            daemon=True
+        ).start()
     
     print(f"[Registro] Total: {len(dispositivos)} estudiantes")
 
@@ -185,7 +198,7 @@ def conectar_cliente(device_id):
         time.sleep(2.0)
         
         if not info.get('conectado'):
-            print(f"[⚠️] {nombre} - No recibió confirmación joined_game")
+            print(f"[⚠️] {nombre} - No recibio confirmacion joined_game")
     
     except Exception as e:
         print(f"[Socket.IO] Error conectando {nombre}: {e}")
@@ -313,14 +326,14 @@ def procesar_respuesta(device_id, answer):
         return
     
     # Convertir letra a texto completo
-    if answer in ['A', 'B', 'C', 'D']:
+    if answer in ['A', 'B', 'C', 'D', 'E']:
         indice = ord(answer) - ord('A')
         
         if 0 <= indice < len(opciones_actuales):
             answer_text = opciones_actuales[indice]
             print(f"[Mapeo] {nombre}: {answer} → '{answer_text}'")
         else:
-            print(f"[Error] {nombre}: Índice {indice} fuera de rango")
+            print(f"[Error] {nombre}: Indice {indice} fuera de rango")
             return
     
     elif answer == "":
@@ -348,7 +361,7 @@ def procesar_respuesta(device_id, answer):
 
 def main():
     print("=" * 80)
-    print("PROXY MICROBIT-CLASSQUIZ (DEBUG MODE)")
+    print("PROXY MICROBIT-CLASSQUIZ CON LIDERES (DEBUG MODE)")
     print("=" * 80)
     print(f"Servidor: {SERVIDOR_CLASSQUIZ}")
     print(f"Game PIN: {GAME_PIN}")

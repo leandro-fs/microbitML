@@ -1,261 +1,156 @@
-# main.py - MicrobitML Perceptron - Ramiro Alarcon Lasagno
+# perceptron.py
 from microbit import *
 import radio
 import music
-from microbitml import RadioPacket
+import machine
+from microbitcore import RadioMessage, ConfigManager
 
-version_token = "pct"
-CONFIG_FILE = 'config.cfg'
-message_bus_max = 9
+SUMA_MAX = 22
 
-role_weights = {"A": 1, "B": 2}
-role_counter_max = {"A": 3, "B": 6}
-role_descriptions = {
-    "A": "perceptron input, weight:{}".format(role_weights["A"]),
-    "B": "perceptron input, weight:{}".format(role_weights["B"]),
-    "Z": "perceptron output, activation function: a+b>4",
-}
+device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
+config = ConfigManager(roles=['Z','A','B'], grupos_max=9, extra_fields={'valor':0})
+config.load()
 
-role_list = list(role_descriptions.keys())
+if config.get('role') is None:
+    config.set('role', 'A')
+if config.get('grupo') is None:
+    config.set('grupo', 0)
+if config.get('valor') is None:
+    config.set('valor', 0)
 
-valid_origin_roles_per_destination = {
-    "A": list(),
-    "B": list(),
-    "Z": ("A", "B")
-}
+msg = RadioMessage(format="csv", device_id=device_id)
+msg.set_context(version="pct", group=config.get('grupo'), role=config.get('role'))
 
-current_role = role_list[0]
-message_bus = 0
+suma_total = 0
+valor_a = 0
+valor_b = 0
 
+def mostrar_leds(n):
+    if n == 0:
+        display.clear()
+        return
+    n = min(n, 25)
+    leds = ""
+    for i in range(25):
+        leds += "9" if i < n else "0"
+    patron = "{}:{}:{}:{}:{}".format(leds[0:5], leds[5:10], leds[10:15], leds[15:20], leds[20:25])
+    display.show(Image(patron))
 
-def error_handler(halt=False, error_code=0, description="desc"):
-    if halt:
-        severity = "FATAL"
-    else:
-        severity = "WARN"
-    print("{}:{}:{}".format(severity, error_code, description))
-    while True:
-        display.show(error_code)
-        sleep(200)
-        display.show(Image.SAD)
-        sleep(2000)
-        if not halt:
-            break
+def actualizar_valor(delta, peso=1):
+    if pin1.is_touched():
+        return
+    v = config.get('valor')
+    if v is None:
+        v = 0
+    v = (v + delta) % 10
+    config.set('valor', v)
+    config.save()
+    vp = v * peso
+    mostrar_leds(vp)
+    radio.send(msg.encode(str(vp)))
 
+def rol_a():
+    if button_a.was_pressed():
+        actualizar_valor(-1, 1)
+    if button_b.was_pressed():
+        actualizar_valor(1, 1)
 
-def load_config():
-    global current_role, message_bus
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            config = eval(f.read())
-        current_role = config['current_role']
-        message_bus = config['message_bus']
-        print("Loaded config:", config)
-    except:
-        current_role = role_list[0]
-        message_bus = 0
-        print("Using default config")
+def rol_b():
+    if button_a.was_pressed():
+        actualizar_valor(-1, 2)
+    if button_b.was_pressed():
+        actualizar_valor(1, 2)
 
-
-def save_config():
-    try:
-        config = {
-            'current_role': current_role,
-            'message_bus': message_bus
-        }
-        with open(CONFIG_FILE, 'w') as f:
-            f.write(repr(config))
-        print("Saved config:", config)
-    except Exception as e:
-        print("Save error:", e)
-
-
-class PerceptronModel():
-    
-    def __init__(self, role, packet_input, packet_output):
-        if role in role_list:
-            self.role = role
-            self.counter = {"A": 0, "B": 0}
-            self.output = 0
-            self.packet_input = packet_input
-            self.packet_output = packet_output
-            self.output_threshold = 7
-            # Fijar el rol y bus en ambos packets para evitar usar globals
-            self.packet_output.fixed_role = role
-            self.packet_output.fixed_bus = message_bus
-            self.packet_input.fixed_bus = message_bus
-        else:
-            error_handler(halt=True, error_code=1, description="FATAL:unexisting role {}".format(role))
-            
-    def event_handler(self, event, param_dict):
-        if event == "message":
-            self.handle_message(param_dict)
-        elif event == "button":
-            self.handle_button(param_dict)
-        else:
-            error_handler(halt=True, error_code=1, description="FATAL:unexisting event {}".format(event))        
-
-            
-    def update_output(self):
-        previous_output = self.output
-        counters_sum = self.counter["A"] + self.counter["B"]
-        if counters_sum >= self.output_threshold:
-            self.output = 1
-            if self.output != previous_output:
-                music.pitch(frequency=500, duration=250, wait=False)
-        else:
-            self.output = 0
-            if self.output != previous_output:            
-                music.pitch(frequency=7000, duration=500, wait=False)
-        display.show(counters_sum)
-        for pixel_row in range(5):
-            display.set_pixel(4, pixel_row, 9 * self.output)
-
-    
-    def handle_message(self, param_dict):
-        if self.role == "Z":
-            if param_dict["origin"] in self.counter.keys():
-                try:
-                    self.counter[param_dict["origin"]] = int(param_dict["payload"])
-                    self.update_output()
-                except Exception as e:
-                    print("DEBUG:{}:model.message():{}".format(self.role, e))        
-            else:
-                print("WARN:{}:model.message():paramDict[origin] '{}' not in self.counter.keys".format(self.role, param_dict["origin"]))
-        else:
-            print("DEBUG:{}:model.message():unimplemented message handler".format(self.role))
-    
-    def handle_button(self, param_dict):
-        if self.role in ("A", "B"):
-            increment = 1
-            increment *= role_weights[self.role]
-            if param_dict["button"] == "a":
-                if self.counter[self.role] + increment > role_counter_max[self.role]:
-                    increment = 0
-                else:
-                    self.counter[self.role] += increment
-            elif param_dict["button"] == "b":
-                if self.counter[self.role] - increment < 0:
-                    increment = 0
-                else:
-                    self.counter[self.role] -= increment          
-            else:
-                print("WARN:{}:model.button():paramDict[button] '{}' not implmented".format(self.role, param_dict["button"]))                
-                increment = 0
-            if increment == 0:                
-                pass
-            display.show(self.counter[self.role])
-            encoded_packet = self.packet_output.encode(self.counter[self.role])
-            radio.send(encoded_packet)    
-        else:
-            print("DEBUG:{}:model.button():unimplemented button handler".format(self.role))
-
-
-def message_send(role_destination, message):
-    print("DEBUG:{}:messageSend({},{})".format(current_role, role_destination, message))
-
-
-def message_attend(message):
-    print("DEBUG:{}:messageAttend({})".format(current_role, message))
-
-
-def indicator_led_off():
-    display.set_pixel(4, 0, 0)
-
-
-def indicator_led_on():
-    display.set_pixel(4, 0, 9)
-
-
-def button_a_was_pressed(config_adjust):
-    global model
-    if config_adjust:
-        global current_role
-        previous_role = current_role
-        role_index = role_list.index(current_role)
-        if role_index < len(role_list) - 1:
-            current_role = role_list[role_index + 1]
-        else:
-            current_role = role_list[0]
-        pin_logo_is_touched()
-        save_config()
-        print("INFO:button_a_was_pressed({}),prevRole:{},newRole:{}".format(config_adjust, previous_role, current_role))
-    else:
-        model.event_handler(event="button", param_dict={"button": "a"})
-
-
-def button_b_was_pressed(config_adjust):
-    if config_adjust:
-        global message_bus
-        message_bus += 1
-        if message_bus > message_bus_max:
-            message_bus = 0
-        pin_logo_is_touched()
-        save_config()
-        print("INFO:button_b_was_pressed({}),newbus:{}".format(config_adjust, message_bus))
-    else:
-        model.event_handler(event="button", param_dict={"button": "b"})
-
-
-def on_message_received(message):
-    # CORRECCION: Filtrar mensajes del propio rol ANTES de decodificar
-    try:
-        parts = message.split(",")
-        sender_role = parts[2] if len(parts) > 2 else ""
+def rol_z():
+    global valor_a, valor_b, suma_total
+    rx = radio.receive()
+    if rx:
+        decoded = msg.decode(rx, ['A','B'])
         
-        # Ignorar mensajes propios (no es clonacion, es radio broadcast)
-        if sender_role == current_role:
-            print("DEBUG:on_message():mensaje propio ignorado de '{}'".format(sender_role))
-            return
-    except:
-        pass  # Si falla el split, continuar con decodificacion normal
-    
-    # Decodificacion normal para mensajes de otros roles
-    valid_origin_roles = valid_origin_roles_per_destination[current_role]
-    decode_valid, decode_description, from_role, decoded_payload = packet_input.decode(message, valid_origin_roles)
-    print("DEBUG:on_message(packet_input.decode({})):{},'{}','{}'".format(message, decode_valid, decode_description, decoded_payload))
-    if decode_valid:
-        print("INFO:on_message():in from '{}': '{}'".format(from_role, decoded_payload))
-        model.handle_message(param_dict={"origin": from_role, "payload": decoded_payload})
-    else:
-        print("DEBUG:on_message():pass".format(message, decode_valid))
+        if decoded['t'] == 'csv_valid':
+            sender = decoded.get('m')
+            payload = decoded.get('d')
+            
+            if sender and payload:
+                try:
+                    val = int(payload)
+                    suma_anterior = suma_total
+                    
+                    if sender == 'A':
+                        valor_a = val
+                    elif sender == 'B':
+                        valor_b = val
+                    
+                    suma_total = valor_a + valor_b
+                    
+                    if suma_total > SUMA_MAX:
+                        suma_total = SUMA_MAX
+                    
+                    if suma_total == SUMA_MAX and suma_anterior != SUMA_MAX:
+                        music.pitch(frequency=500, duration=250, wait=False)
+                    
+                    mostrar_leds(suma_total)
+                except:
+                    pass
 
+def cambiar_config():
+    global msg
+    if pin1.is_touched():
+        if button_a.was_pressed():
+            config.cycle_role()
+            config.save()
+            nr = config.get('role')
+            msg.set_context(role=nr)
+            display.show(str(nr))
+            sleep(1000)
+            display.clear()
+            button_a.was_pressed()
+        elif button_b.was_pressed():
+            config.cycle_grupo()
+            config.save()
+            ng = config.get('grupo')
+            msg.set_context(group=ng)
+            if ng is not None:
+                radio.config(chn=ng, power=6, length=64, queue=10)
+            display.show(str(ng))
+            sleep(1000)
+            display.clear()
+            button_b.was_pressed()
 
-def pin_logo_is_touched():
-    keep_going = True
-    while keep_going:
-        display.show(current_role)
+def mostrar_config():
+    r = config.get('role')
+    g = config.get('grupo')
+    if r is not None:
+        display.show(str(r))
         sleep(500)
-        display.show(message_bus)
-        sleep(200)
-        keep_going = pin_logo.is_touched()
-        if keep_going:
-            print("DEBUG:pin_logo_is_touched(),Role:{},message_bus:{}".format(current_role, message_bus))
+    if g is not None:
+        display.show(str(g))
+        sleep(500)
     display.clear()
 
+radio.on()
+g = config.get('grupo')
+radio.config(chn=g if g else 0, power=6, length=64, queue=10)
 
-# Main execution
-if __name__ == "__main__":
-    display.scroll(version_token)
-    load_config()
-    packet_input = RadioPacket()
-    packet_output = RadioPacket()
-    radio.on()
-    radio.config(group=153)
-    model = PerceptronModel(current_role, packet_input, packet_output)
-    pin_logo_is_touched()
-    model.update_output()
-    
-    # Main loop
-    while True:
-        if button_a.was_pressed():
-            config_adjust = pin1.is_touched()
-            button_a_was_pressed(config_adjust)
-        if button_b.was_pressed():
-            config_adjust = pin1.is_touched()
-            button_b_was_pressed(config_adjust)
-        if pin_logo.is_touched():
-            pin_logo_is_touched()
-        message = radio.receive()
-        if message:
-            on_message_received(message)
+r = config.get('role')
+if r:
+    display.show(str(r))
+    sleep(500)
+if g:
+    display.show(str(g))
+    sleep(500)
+display.clear()
+
+while True:
+    cambiar_config()
+    if pin_logo.is_touched():
+        mostrar_config()
+    if not pin1.is_touched():
+        ra = config.get('role')
+        if ra == 'A':
+            rol_a()
+        elif ra == 'B':
+            rol_b()
+        elif ra == 'Z':
+            rol_z()
+    sleep(50)

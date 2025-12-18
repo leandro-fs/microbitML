@@ -1,223 +1,251 @@
-# concentrador_dual.py - OPTIMIZADO
-# Reducido para memoria flash limitada
 from microbit import *
-import radio
-import machine
+import radio, machine
 from microbitcore import RadioMessage
 
-CANALES_GRUPOS = list(range(1, 21))
 CANAL_PUBLICO = 80
-DISCOVERY_TIMEOUT_MS = 2000
 
 device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
+
 lideres_por_grupo = {}
 votantes_sin_lider = {}
-respuestas = {}
 
-msg_csv = RadioMessage(format="csv")
-msg_cmd = RadioMessage(format="command", device_id=device_id)
+msg = RadioMessage(format="command", device_id=device_id)
 
-
-def usb(t, d=""):
-    uart.write("{}:{}\n".format(t, d))
+canal_actual = None
 
 
-def detectar_formato(m):
-    return 'csv' if ',' in m and len(m.split(',')) == 4 else 'command' if ':' in m or m in ['REPORT', 'PING'] else None
+def switch_canal(canal):
+    global canal_actual
+    canal_int = int(canal)
+    if canal_actual != canal_int:
+        radio.config(channel=canal_int)
+        canal_actual = canal_int
 
 
-def procesar_perceptron(m):
-    p = m.split(',')
-    if len(p) == 4:
-        usb("P", "{}:{}:{}:{}".format(p[0], p[1], p[2], p[3]))
+def enviar_json(datos):
+    tipo = datos.get('type', '')
+    
+    if tipo == 'device_registered':
+        uart.write('{{"type":"device_registered","device_id":"{}","role":"{}","group":{}}}\n'.format(
+            datos.get('device_id'),
+            datos.get('role'),
+            datos.get('group')
+        ))
+    
+    elif tipo == 'answer':
+        uart.write('{{"type":"answer","device_id":"{}","answer":"{}","source":"{}","group":{}}}\n'.format(
+            datos.get('device_id'),
+            datos.get('answer'),
+            datos.get('source'),
+            datos.get('group')
+        ))
+    
+    elif tipo == 'discovery_complete':
+        uart.write('{{"type":"discovery_complete","lideres":{},"votantes":{}}}\n'.format(
+            datos.get('lideres'),
+            datos.get('votantes')
+        ))
+    
+    elif tipo == 'error':
+        uart.write('{{"type":"error","msg":"{}"}}\n'.format(datos.get('msg')))
+    
+    elif tipo == 'debug':
+        uart.write('{{"type":"debug","msg":"{}"}}\n'.format(datos.get('msg')))
 
 
-def procesar_report():
-    for grupo in CANALES_GRUPOS:
-        radio.config(chn=grupo)
-        radio.send(msg_cmd.command("REPORT"))
+def discovery_completo():
+    display.show('R')
+    global lideres_por_grupo, votantes_sin_lider
+    lideres_por_grupo = {}
+    votantes_sin_lider = {}
+    
+    # Discovery por canales privados (grupos 1-20)
+    for grupo in range(1, 21):
+        switch_canal(grupo)
+        radio.send(msg.cmd_report())
+        sleep(100)
         
-        timeout = running_time() + DISCOVERY_TIMEOUT_MS
-        lider_encontrado = False
-        
-        while running_time() < timeout:
-            received = radio.receive()
-            if received:
-                decoded = msg_cmd.decode(received)
-                datos = decoded.get('d')
-                
-                if decoded['t'] == "ID_LIDER" and datos:
-                    partes = datos.split(':')
-                    if len(partes) >= 2:
-                        grupo_msg = int(partes[0])
-                        lider_id = partes[1]
-                        
-                        if grupo_msg == grupo and not lider_encontrado:
-                            lideres_por_grupo[grupo] = lider_id
-                            lider_encontrado = True
-                            radio.send(msg_cmd.command("ACK_LIDER", grupo, device_id))
-                            usb("L", "{}:{}".format(grupo, lider_id[:8]))
+        tiempo_limite = running_time() + 2000
+        while running_time() < tiempo_limite:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ID_LIDER":
+                    data = decoded.get('d')
+                    if data:
+                        partes = data.split(':')
+                        if len(partes) >= 2 and int(partes[0]) == grupo:
+                            lideres_por_grupo[grupo] = partes[1]
+                            radio.send(msg.cmd_ack(partes[1]))
+                            enviar_json({
+                                'type': 'device_registered',
+                                'device_id': partes[1],
+                                'role': 'lider',
+                                'group': grupo
+                            })
             sleep(10)
     
-    radio.config(chn=CANAL_PUBLICO)
-
-
-def registrar_votantes_sin_lider():
-    timeout = running_time() + 3000
+    # Discovery en canal público (votantes sin líder)
+    switch_canal(CANAL_PUBLICO)
+    radio.send(msg.cmd_report())
+    sleep(100)
     
-    while running_time() < timeout:
-        received = radio.receive()
-        if received:
-            decoded = msg_cmd.decode(received)
-            datos = decoded.get('d')
-            
-            if decoded['t'] == "ID_VOTANTE" and datos:
-                partes = datos.split(':')
-                if len(partes) >= 3:
-                    grupo_msg = int(partes[0])
-                    rol = partes[1]
-                    votante_id = partes[2]
-                    
-                    votantes_sin_lider[votante_id] = {'grupo': grupo_msg, 'rol': rol}
-                    radio.send(msg_cmd.command("ACK_VOTANTE", votante_id, device_id))
-                    usb("V", "{}:{}:{}".format(grupo_msg, rol, votante_id[:8]))
+    tiempo_limite = running_time() + 3000
+    while running_time() < tiempo_limite:
+        rx = radio.receive()
+        if rx:
+            decoded = msg.decode(rx)
+            if decoded['t'] == "ID_VOTANTE":
+                data = decoded.get('d')
+                if data:
+                    partes = data.split(':')
+                    if len(partes) >= 3:
+                        grupo_id = int(partes[0])
+                        role = partes[1]
+                        disp_id = partes[2]
+                        
+                        if grupo_id not in lideres_por_grupo and disp_id not in votantes_sin_lider:
+                            votantes_sin_lider[disp_id] = {'role': role, 'group': grupo_id}
+                            radio.send(msg.cmd_ack(disp_id))
+                            enviar_json({
+                                'type': 'device_registered',
+                                'device_id': disp_id,
+                                'role': role,
+                                'group': grupo_id
+                            })
         sleep(10)
+    
+    enviar_json({
+        'type': 'discovery_complete',
+        'lideres': len(lideres_por_grupo),
+        'votantes': len(votantes_sin_lider)
+    })
+    display.clear()
 
 
-def broadcast_qparams(tipo, num):
-    mensaje = msg_cmd.command("QPARAMS", tipo, num)
+def polling_respuestas():
+    display.show('P')
     
-    for grupo in lideres_por_grupo.keys():
-        radio.config(chn=grupo)
-        radio.send(mensaje)
-        sleep(50)
-    
-    radio.config(chn=CANAL_PUBLICO)
-    radio.send(mensaje)
-    sleep(50)
-    
-    usb("Q", "{}:{}".format(tipo, num))
-
-
-def hacer_polling():
-    respuestas.clear()
-    
+    # Polling a líderes
     for grupo, lider_id in lideres_por_grupo.items():
-        radio.config(chn=grupo)
-        radio.send(msg_cmd.cmd_poll(lider_id))
-        radio.config(chn=CANAL_PUBLICO)
+        switch_canal(grupo)
+        radio.send(msg.cmd_poll(lider_id))
+        sleep(50)
         
-        timeout = running_time() + 2000
-        respondio = False
+        switch_canal(CANAL_PUBLICO)
+        tiempo_limite = running_time() + 6000
+        encontrado = False
         
-        while running_time() < timeout and not respondio:
-            received = radio.receive()
-            if received:
-                decoded = msg_cmd.decode(received)
-                datos = decoded.get('d')
-                
-                if decoded['t'] == "ANSWER" and datos:
-                    partes = datos.split(':')
-                    if len(partes) >= 2:
-                        respuesta_id = partes[0]
-                        opcion = partes[1]
-                        
-                        if respuesta_id == lider_id:
-                            respuestas[grupo] = opcion
-                            respondio = True
-                            usb("AG", "{}:{}".format(grupo, opcion))
+        while running_time() < tiempo_limite and not encontrado:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ANSWER":
+                    disp_id, answer = msg.extract_answer(rx)
+                    if disp_id == lider_id:
+                        enviar_json({
+                            'type': 'answer',
+                            'device_id': disp_id,
+                            'answer': answer[0] if answer else '',
+                            'source': 'lider',
+                            'group': grupo
+                        })
+                        encontrado = True
             sleep(10)
     
-    for votante_id in votantes_sin_lider.keys():
-        radio.send(msg_cmd.cmd_poll(votante_id))
+    # Polling a votantes sin líder
+    for disp_id, info in votantes_sin_lider.items():
+        radio.send(msg.cmd_poll(disp_id))
+        sleep(50)
         
-        timeout = running_time() + 1000
-        respondio = False
+        tiempo_limite = running_time() + 3000
+        encontrado = False
         
-        while running_time() < timeout and not respondio:
-            received = radio.receive()
-            if received:
-                decoded = msg_cmd.decode(received)
-                datos = decoded.get('d')
-                
-                if decoded['t'] == "ANSWER" and datos:
-                    partes = datos.split(':')
-                    if len(partes) >= 2:
-                        respuesta_id = partes[0]
-                        opcion = partes[1]
-                        
-                        if respuesta_id == votante_id:
-                            respuestas[votante_id] = opcion
-                            respondio = True
-                            usb("AV", "{}:{}".format(votante_id[:8], opcion))
+        while running_time() < tiempo_limite and not encontrado:
+            rx = radio.receive()
+            if rx:
+                decoded = msg.decode(rx)
+                if decoded['t'] == "ANSWER":
+                    d_id, ans = msg.extract_answer(rx)
+                    if d_id == disp_id:
+                        enviar_json({
+                            'type': 'answer',
+                            'device_id': d_id,
+                            'answer': ans[0] if ans else '',
+                            'source': 'votante',
+                            'group': info['group']
+                        })
+                        encontrado = True
             sleep(10)
     
-    usb("OK", str(len(respuestas)))
+    display.clear()
 
 
-def procesar_comando_usb(linea):
-    linea = linea.strip()
-    if not linea:
-        return
+def procesar_usb(linea):
+    if 'question_params' in linea:
+        display.show('Q')
+        
+        tipo = 'unica'
+        num_opciones = 4
+        
+        if 'multiple' in linea:
+            tipo = 'multiple'
+        if '2' in linea:
+            num_opciones = 2
+        elif '3' in linea:
+            num_opciones = 3
+        
+        mensaje = msg.cmd_qparams(tipo, num_opciones)
+        
+        # Enviar a canal público
+        switch_canal(CANAL_PUBLICO)
+        radio.send(mensaje)
+        
+        # Enviar a todos los canales privados
+        for grupo in range(1, 21):
+            switch_canal(grupo)
+            radio.send(mensaje)
+        
+        switch_canal(CANAL_PUBLICO)
+        display.clear()
     
-    try:
-        if 'question_params' in linea:
-            tipo = "unica"
-            if 'multiple' in linea:
-                tipo = "multiple"
-            
-            num = 4
-            if '2' in linea:
-                num = 2
-            elif '3' in linea:
-                num = 3
-            
-            broadcast_qparams(tipo, num)
-        
-        elif 'start_poll' in linea:
-            hacer_polling()
-        
-        elif 'report' in linea:
-            procesar_report()
-        
-        elif 'register' in linea:
-            registrar_votantes_sin_lider()
+    elif 'start_poll' in linea:
+        polling_respuestas()
     
-    except Exception as e:
-        usb("E", str(e)[:20])
+    elif 'discovery' in linea:
+        discovery_completo()
+    
+    elif 'list_devices' in linea:
+        enviar_json({
+            'type': 'debug',
+            'msg': 'L:' + str(len(lideres_por_grupo)) + ' V:' + str(len(votantes_sin_lider))
+        })
 
 
-def loop_principal():
-    while True:
-        if uart.any():
-            linea = uart.readline()
-            if linea:
-                try:
-                    procesar_comando_usb(linea.decode('utf-8'))
-                except:
-                    pass
-        
-        received = radio.receive()
-        if received:
-            formato = detectar_formato(received)
-            
-            if formato == 'csv':
-                procesar_perceptron(received)
-            elif formato == 'command':
-                decoded = msg_cmd.decode(received)
-                if decoded['t'] == "PING":
-                    if msg_cmd.validate_for_me(received):
-                        radio.send(msg_cmd.command("PONG", device_id, device_id))
-        
-        sleep(10)
-
-
-uart.init(baudrate=115200)
 radio.on()
-radio.config(chn=CANAL_PUBLICO, power=6, length=64, queue=10)
-display.show(Image.HAPPY)
-sleep(1000)
-display.clear()
-usb("READY", device_id[:8])
+radio.config(power=6, length=64, queue=10)
+uart.init(baudrate=115200)
 
-loop_principal()
+switch_canal(CANAL_PUBLICO)
+
+display.show('C')
+sleep(800)
+display.clear()
+
+enviar_json({'type': 'debug', 'msg': 'Ready:' + device_id[:8]})
+
+while True:
+    if button_a.was_pressed():
+        discovery_completo()
+    
+    if uart.any():
+        linea = uart.readline()
+        if linea:
+            try:
+                linea_str = linea.decode().strip()
+                if linea_str:
+                    procesar_usb(linea_str)
+            except:
+                pass
+    
+    sleep(50)

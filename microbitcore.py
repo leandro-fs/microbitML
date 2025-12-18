@@ -1,4 +1,4 @@
-__all__ = ["RadioMessage", "MultichnManager", "ConfigManager"]
+__all__ = ["RadioMessage", "ConfigManager"]
 
 class RadioMessage:
     def __init__(self, format="csv", device_id=None, role=None):
@@ -175,64 +175,6 @@ class RadioMessage:
 
     def validate_for_me(self, message):
         return self.extract_device_id(message) == self.device_id
-
-
-class MultichnManager:
-    def __init__(self, radio_module):
-        self.radio = radio_module
-        self.chn_priv = None
-        self.chn_pub = None
-        self.current_chn = None
-
-    def set_chns(self, private=None, public=None):
-        self.chn_priv = private
-        self.chn_pub = public
-        if private:
-            self.switch_to("private")
-
-    def switch_to(self, chn_name):
-        if chn_name == "private" and self.chn_priv:
-            if self.current_chn != self.chn_priv:
-                self.radio.config(chn=self.chn_priv)
-                self.current_chn = self.chn_priv
-        elif chn_name == "public" and self.chn_pub:
-            if self.current_chn != self.chn_pub:
-                self.radio.config(chn=self.chn_pub)
-                self.current_chn = self.chn_pub
-
-    def send(self, message, chn="private"):
-        self.switch_to(chn)
-        self.radio.send(message)
-
-    def receive(self, chn="private"):
-        self.switch_to(chn)
-        return self.radio.receive()
-
-    def receive_any(self, timeout_ms=500, check_order=None):
-        from microbit import sleep, running_time
-        if not check_order:
-            check_order = ["private", "public"]
-        slot = timeout_ms // len(check_order)
-        for ch in check_order:
-            self.switch_to(ch)
-            tch = running_time()
-            while running_time() - tch < slot:
-                msg = self.radio.receive()
-                if msg:
-                    return (msg, ch)
-                sleep(10)
-        return (None, None)
-
-    def flush_queue(self, chn=None):
-        if chn:
-            self.switch_to(chn)
-            while self.radio.receive():
-                pass
-        else:
-            for ch in ["private", "public"]:
-                self.switch_to(ch)
-                while self.radio.receive():
-                    pass
 
 
 class ConfigManager:

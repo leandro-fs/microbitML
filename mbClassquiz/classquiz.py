@@ -1,267 +1,359 @@
+# classquiz.py - classquiz con grupo:rol usando microbitcore
+
 from microbit import *
-import radio, machine
+import radio
+import machine
 from microbitcore import RadioMessage, ConfigManager
+from random import randint
 
-CANAL_PUBLICO = 80
-LETRAS = ['A', 'B', 'C', 'D', 'E']
-DELAYS_DISCOVERY = {'A': 0, 'B': 150, 'C': 300, 'D': 450, 'E': 600}
-
+# === IDENTIFICACION ===
 device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
 
+# === CONFIGURACION RADIO ===
+radio.config(channel=7, power=6, length=64, queue=10)
+radio.on()
+
+# === PROTOCOLO ===
+msg_handler = RadioMessage(format="command", device_id=device_id)
+
+# === HELPERS (microbitcore no incluye group/role en comandos) ===
+def calc_discovery_delay():
+    g = int(config.get('grupo') or 1)
+    r = str(config.get('role') or 'A')
+    try:
+        ridx = config.roles.index(r)
+    except:
+        ridx = 0
+    # Grupos van de 1-9, entonces restamos 1 para el slot
+    slot = (g - 1) * len(config.roles) + ridx
+    # Total dispositivos: 9 grupos * 6 roles = 54
+    # Delays: G1:A=0ms, G9:Z=8750ms
+    max_delay = 8750
+    max_slot = 53  # 0 a 53 = 54 dispositivos
+    return int((slot * max_delay) / max_slot) if max_slot > 0 else 0
+
+def cmd_id_with_group(grupo, role):
+    return msg_handler.command("ID", device_id, grupo, role)
+
+def cmd_answer_with_group(grupo, role, opcion):
+    return msg_handler.command("ANSWER", device_id, grupo, role, opcion)
+
+def log(mensaje):
+    # Log por USB (serial)
+    try:
+        print(mensaje)
+    except:
+        pass
+
+def cycle_grupo_fixed():
+    """Cicla grupo entre 1-9 (no 0-9)"""
+    g = config.get('grupo')
+    if g is None or not isinstance(g, int):
+        g = 1
+    else:
+        g = (g % 9) + 1 
+    config.set('grupo', g)
+    return g
+
+# === CONFIGURACION GRUPO:ROL ===
 config = ConfigManager(
+    config_file='config.cfg',
     roles=['A', 'B', 'C', 'D', 'E', 'Z'],
-    grupos_max=20,
-    extra_fields={'tiene_lider': False, 'voto': None, 'num_opciones': 4}
+    grupos_max=9
 )
 config.load()
 
-msg = RadioMessage(format="command", device_id=device_id)
+# Corregir grupo=0 invalido
+if config.get('grupo') == 0:
+    config.set('grupo', 1)
+    config.save()
+    log('CFG:Corregido_grupo=0_a_grupo=1')
 
-opcion_actual = 0
-lider_id = None
-votantes_registrados = {}
-votos_recibidos_estudiantes = {}
+# === ESTADO VOTACION ===
+vote_config = ConfigManager(
+    config_file='vote.cfg',
+    roles=[],
+    extra_fields={'tipo': None, 'num_opciones': 4, 'opcion': None, 'confirmada': False}
+)
+vote_config.load()
 
-canal_privado = config.get('grupo')
-canal_actual = None
-
-
-def switch_canal(publico):
-    global canal_actual
-    target = CANAL_PUBLICO if publico else (canal_privado or 0)
-    if canal_actual != target:
-        radio.config(channel=target)
-        canal_actual = target
-
-
-def enviar(mensaje, publico=False):
-    switch_canal(publico)
-    radio.send(mensaje)
+# === ESTADO ===
+registrado = False
+modo_config = False
 
 
-def recibir(publico=False):
-    switch_canal(publico)
-    return radio.receive()
 
 
-def calcular_consenso(votos):
-    if not votos:
-        return ""
-    conteo = {}
-    for v in votos:
-        if v:
-            conteo[v] = conteo.get(v, 0) + 1
-    if not conteo:
-        return ""
-    key_max = None
-    val_max = -1
-    for k in conteo:
-        if conteo[k] > val_max:
-            val_max = conteo[k]
-            key_max = k
-    return key_max if key_max else ""
 
-
-def resetear_voto():
-    global opcion_actual
-    config.set('voto', None)
-    opcion_actual = 0
-    votos_recibidos_estudiantes.clear()
+def mostrar_config():
+    """Muestra grupo:rol en display"""
+    display.show(str(config.get('role')))
+    sleep(500)
+    display.show(str(config.get('grupo')))
+    sleep(500)
     display.clear()
 
 
-def navegacion_opciones():
-    global opcion_actual
-    num_opts = config.get('num_opciones') or 4
-    if button_a.was_pressed():
-        opcion_actual = (opcion_actual - 1) % num_opts
-        display.show(LETRAS[opcion_actual])
-    if button_b.was_pressed():
-        opcion_actual = (opcion_actual + 1) % num_opts
-        display.show(LETRAS[opcion_actual])
-    if button_a.is_pressed() and button_b.is_pressed():
-        config.set('voto', LETRAS[opcion_actual])
-        if config.get('role') in LETRAS and config.get('tiene_lider'):
-            enviar(msg.cmd_vote(LETRAS[opcion_actual]))
+def procesar_report():
+    """Responde a REPORT con delay calculado"""
+    log("RX:REPORT")
+
+    # Calcular delay determinista
+    delay_ms = calc_discovery_delay()
+    
+    # Obtener valores actuales
+    grupo = config.get('grupo')
+    role = config.get('role')
+    
+    log("CFG:G{}:{}".format(grupo, role))
+    log("Delay:{}ms".format(delay_ms))
+    sleep(delay_ms)
+
+    # Enviar ID con grupo:rol
+    comando = cmd_id_with_group(grupo, role)
+    log("TX_CMD:{}".format(comando))
+    msg_handler.send(radio.send, comando)
+    log("TX:ID:G{}:{}".format(grupo, role))
+
+
+def procesar_ack(mensaje):
+    """Procesa ACK de registro"""
+    global registrado
+
+    if msg_handler.is_for_me(mensaje):
+        registrado = True
+        log("Registrado_OK")
+        display.show(Image.DUCK)
+        sleep(400)
+
+        display.show(Image.YES)
+        sleep(1000)
+        display.clear()
+
+
+def procesar_qparams(mensaje):
+    """Procesa parametros de pregunta"""
+    tipo, num_str = msg_handler.extract_qparams(mensaje)
+
+    if tipo and num_str is not None:
+        vote_config.set('tipo', tipo)
+        vote_config.set('num_opciones', num_str)
+        vote_config.set('opcion', None)
+        vote_config.set('confirmada', False)
+        vote_config.save()
+
+        log("QPARAMS:{}:{}".format(tipo, num_str))
+
+        display.show(Image.ARROW_E)
+        sleep(300)
+        display.clear()
+
+
+def procesar_poll(mensaje):
+    """Procesa POLL:grupo:rol"""
+    tipo, args = msg_handler.parse_payload(mensaje)
+    
+    log("RX:POLL_raw:{}".format(mensaje))
+
+    if len(args) >= 2:
+        grupo_poll = int(args[0])
+        rol_poll = args[1]
+
+        mi_grupo = config.get('grupo')
+        mi_rol = config.get('role')
+        
+        log("POLL:G{}:{}_vs_MIO:G{}:{}".format(grupo_poll, rol_poll, mi_grupo, mi_rol))
+
+        if grupo_poll == mi_grupo and rol_poll == mi_rol:
+            log("POLL_MATCH:respondiendo")
+            enviar_respuesta()
+        else:
+            log("POLL_NO_MATCH:ignorando")
+
+
+def enviar_respuesta():
+    """Envia respuesta con grupo:rol"""
+    opcion = vote_config.get('opcion')
+    if opcion is None:
+        opcion = ""
+
+    grupo = config.get('grupo')
+    role = config.get('role')
+
+    comando = cmd_answer_with_group(grupo, role, opcion)
+    log("TX_CMD:{}".format(comando))
+    msg_handler.send(radio.send, comando)
+
+    log("TX:ANSWER:G{}:{}:{}".format(grupo, role, opcion))
+
+    display.show(Image.ARROW_W)
+    sleep(200)
+    display.clear()
+
+
+def procesar_ping(mensaje):
+    """Responde a PING"""
+    if msg_handler.is_for_me(mensaje):
+        log("RX:PING")
+        msg_handler.send(radio.send, msg_handler.cmd_pong())
+        log("TX:PONG")
+
+
+def navegar_opcion(direccion):
+    """Navega entre opciones A,B,C,D"""
+    if vote_config.get('confirmada'):
+        return
+
+    opcion_actual = vote_config.get('opcion')
+    num_opciones = vote_config.get('num_opciones')
+
+    opciones = ['A', 'B', 'C', 'D'][:num_opciones]
+
+    if opcion_actual is None:
+        idx = 0
+    else:
+        try:
+            idx = opciones.index(opcion_actual)
+        except:
+            idx = 0
+
+    if direccion == 1:
+        idx = (idx + 1) % len(opciones)
+    else:
+        idx = (idx - 1) % len(opciones)
+
+    vote_config.set('opcion', opciones[idx])
+    vote_config.save()
+
+    display.show(opciones[idx])
+    sleep(300)
+    display.clear()
+
+
+def confirmar_voto():
+    """Confirma el voto actual"""
+    if vote_config.get('opcion') is not None:
+        vote_config.set('confirmada', True)
+        vote_config.save()
+
         display.show(Image.YES)
         sleep(500)
         display.clear()
 
 
-def lider_responder_report():
-    enviar(msg.command("ID_LIDER", config.get('grupo'), device_id))
-    tiempo_limite = running_time() + 2000
-    while running_time() < tiempo_limite:
-        rx = recibir()
-        if rx and msg.decode(rx)['t'] == "ACK_LIDER":
-            votantes_registrados.clear()
-            tiempo_registro = running_time() + 3000
-            while running_time() < tiempo_registro:
-                rx2 = recibir()
-                if rx2:
-                    decoded = msg.decode(rx2)
-                    data = decoded.get('d')
-                    if decoded['t'] == "ID_VOTANTE" and data:
-                        partes = data.split(':')
-                        if len(partes) >= 3 and int(partes[0]) == config.get('grupo'):
-                            votantes_registrados[partes[2]] = partes[1]
-                            enviar(msg.command("ACK_VOTANTE", partes[2], device_id))
-                sleep(10)
-            return True
-        sleep(10)
-    return False
+def resetear_voto():
+    """Resetea el voto"""
+    vote_config.set('opcion', None)
+    vote_config.set('confirmada', False)
+    vote_config.save()
 
-
-def lider_polling():
-    votos_recibidos_estudiantes.clear()
-    tiempo_limite = running_time() + 5000
-    while running_time() < tiempo_limite:
-        rx = recibir()
-        if rx:
-            decoded = msg.decode(rx)
-            data = decoded.get('d')
-            if decoded['t'] == "ANSWER" and data:
-                partes = data.split(':')
-                if len(partes) >= 2 and partes[0] in votantes_registrados:
-                    votos_recibidos_estudiantes[partes[0]] = partes[1]
-        sleep(10)
-    
-    voto_lider = config.get('voto')
-    if voto_lider:
-        votos_recibidos_estudiantes[device_id] = voto_lider
-    
-    consenso = calcular_consenso(list(votos_recibidos_estudiantes.values()))
-    enviar(msg.command("ANSWER", device_id, consenso), True)
-    if consenso:
-        config.set('voto', consenso)
-
-
-def votante_descubrir_lider():
-    global lider_id
-    tiempo_limite = running_time() + 2500
-    while running_time() < tiempo_limite:
-        rx = recibir()
-        if rx and msg.decode(rx)['t'] == "ACK_LIDER":
-            lider_id = msg.extract_device_id(rx)
-            if lider_id:
-                config.set('tiene_lider', True)
-                return True
-        sleep(10)
-    config.set('tiene_lider', False)
-    return False
-
-
-def votante_registrarse_lider():
-    if not lider_id:
-        return False
-    
-    role = config.get('role')
-    sleep(DELAYS_DISCOVERY.get(role, 0) if role else 0)
-    
-    enviar(msg.command("ID_VOTANTE", config.get('grupo'), config.get('role'), device_id))
-    
-    tiempo_limite = running_time() + 3000
-    while running_time() < tiempo_limite:
-        rx = recibir()
-        if rx:
-            decoded = msg.decode(rx)
-            data = decoded.get('d')
-            if decoded['t'] == "ACK_VOTANTE" and data:
-                if data.split(':')[0] == device_id:
-                    return True
-        sleep(10)
-    
-    config.set('tiene_lider', False)
-    return False
-
-
-def votante_registrarse_concentrador():
-    role = config.get('role')
-    sleep(DELAYS_DISCOVERY.get(role, 0) if role else 0)
-    
-    enviar(msg.command("ID_VOTANTE", config.get('grupo'), config.get('role'), device_id), True)
-    
-    tiempo_limite = running_time() + 3000
-    while running_time() < tiempo_limite:
-        rx = recibir(True)
-        if rx and msg.decode(rx)['t'] == "ACK_VOTANTE":
-            return True
-        sleep(10)
-    return False
-
-
-def procesar_mensaje(rx):
-    decoded = msg.decode(rx)
-    tipo = decoded['t']
-    data = decoded.get('d')
-    
-    if tipo == "REPORT":
-        if config.get('role') == 'Z':
-            if lider_responder_report():
-                pass
-        elif config.get('role') in LETRAS:
-            if votante_descubrir_lider():
-                votante_registrarse_lider()
-            else:
-                votante_registrarse_concentrador()
-    
-    elif tipo == "QPARAMS" and data:
-        partes = data.split(':')
-        if len(partes) >= 2:
-            config.set('num_opciones', int(partes[1]))
-            resetear_voto()
-    
-    elif tipo == "VOTE" and config.get('role') == 'Z' and data:
-        partes = data.split(':')
-        if len(partes) >= 2 and partes[0] != device_id:
-            votos_recibidos_estudiantes[partes[0]] = partes[1]
-    
-    elif tipo == "POLL":
-        if config.get('role') == 'Z' and msg.validate_for_me(rx):
-            lider_polling()
-        elif config.get('role') in LETRAS and not config.get('tiene_lider') and msg.validate_for_me(rx):
-            voto = config.get('voto')
-            if voto:
-                enviar(msg.command("ANSWER", device_id, voto), True)
-    
-    elif tipo == "PING" and msg.validate_for_me(rx):
-        enviar(msg.command("PONG", device_id, device_id), True)
-
-
-radio.on()
-radio.config(power=6, length=64, queue=10)
-switch_canal(False)
-
-role = config.get('role')
-if role:
-    display.show(str(role))
+    display.show(Image.NO)
     sleep(300)
     display.clear()
 
+
+# === INICIO ===
+display.show(Image.HEART)
+sleep(500)
+display.clear()
+
+# === LOOP PRINCIPAL ===
 while True:
+    # === MODO CONFIGURACION ===
     if pin1.is_touched():
+        modo_config = True
+
+        log('CFG:PIN1_inicio')
+        
+        sleep(200)  # Debounce inicial
+        
+        # Mientras pin1 está tocado, esperar botones
+        while pin1.is_touched():
+            # Cambiar rol con A
+            if button_a.was_pressed():
+                log('BTN:A (cfg)')
+                config.cycle_role()
+                config.save()
+                display.clear()
+                sleep(100)
+                mostrar_config()
+
+                
+                # Esperar a que suelte A
+                while button_a.is_pressed():
+                    sleep(50)
+            
+            # Cambiar grupo con B
+            if button_b.was_pressed():
+                log('BTN:B (cfg)')
+                cycle_grupo_fixed()
+                config.save()
+                display.clear()
+                sleep(100)
+                mostrar_config()
+                
+                # Esperar a que suelte B
+                while button_b.is_pressed():
+                    sleep(50)
+            
+            sleep(50)
+        
+        # Al soltar pin1, salir
+        display.clear()
+        log('CFG:PIN1_fin')
+        modo_config = False
+        sleep(200)  # Debounce final
+
+    # === LOGO: MOSTRAR GRUPO:ROL ===
+    if pin_logo.is_touched():
+        log('BTN:LOGO')
+        mostrar_config()
+
+    # === MENSAJES RADIO ===
+    resultado = msg_handler.receive(radio.receive)
+    if resultado:
+        tipo = resultado['t']
+        data = resultado['d']
+
+        if tipo == 'REPORT':
+            procesar_report()
+
+        elif tipo == 'ACK':
+            procesar_ack(data)
+
+        elif tipo == 'QPARAMS':
+            procesar_qparams(data)
+
+        elif tipo == 'POLL':
+            procesar_poll(data)
+
+        elif tipo == 'PING':
+            procesar_ping(data)
+
+    # === VOTACION (solo si registrado) ===
+    if registrado:
+        # Boton A: navegar opciones
         if button_a.was_pressed():
-            config.cycle_role()
-            config.save()
-            display.show(str(config.get('role')))
+            log('BTN:A')
+            navegar_opcion(1)
+
+        # Boton B: navegar opciones (reversa)
+        if button_b.was_pressed():
+            log('BTN:B')
+            navegar_opcion(-1)
+
+        # A+B: confirmar
+        if button_a.is_pressed() and button_b.is_pressed():
+            log('BTN:A+B')
+            confirmar_voto()
             sleep(500)
-            display.clear()
-            button_a.was_pressed()
-        elif button_b.was_pressed():
-            config.cycle_grupo()
-            config.save()
-            nuevo_grupo = config.get('grupo')
-            canal_privado = nuevo_grupo
-            display.show(str(nuevo_grupo))
-            sleep(500)
-            display.clear()
-            button_b.was_pressed()
+
+    # === BOTONES CUANDO NO REGISTRADO ===
     else:
-        navegacion_opciones()
-        rx = recibir(False)
-        if rx:
-            procesar_mensaje(rx)
-        rx = recibir(True)
-        if rx:
-            procesar_mensaje(rx)
-    sleep(50)
+        a = button_a.was_pressed()
+        b = button_b.was_pressed()
+        if a or b:
+            log('BTN:' + ('A' if a else '') + ('B' if b else ''))
+            mostrar_config()
+
+    sleep(20)

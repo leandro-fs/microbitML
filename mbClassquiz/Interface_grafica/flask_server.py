@@ -67,7 +67,7 @@ def get_config():
 
 @app.route('/api/guardar_todo', methods=['POST'])
 def guardar_todo():
-    """Guardar configuración y alumnos en un único archivo CSV"""
+    """Generar CSV y enviarlo como descarga"""
     try:
         data = request.json
 
@@ -97,68 +97,66 @@ def guardar_todo():
 
         # Sanitizar nombre de archivo
         nombre_archivo = ''.join(c for c in nombre_archivo if c.isalnum() or c in ('_', '-'))
-        archivo_path = os.path.join('data', f'{nombre_archivo}.csv')
 
-        print(f"[Flask] Guardando configuración: URL={url}, PIN={pin}, Timeout={timeout}")
-        print(f"[Flask] Guardando {len(alumnos_data)} alumnos")
-        print(f"[Flask] Archivo destino: {archivo_path}")
+        print(f"[Flask] Generando CSV: URL={url}, PIN={pin}, Timeout={timeout}")
+        print(f"[Flask] Total alumnos: {len(alumnos_data)}")
 
-        # Crear directorio data si no existe
-        utils.crear_directorio_data()
+        # Generar CSV en memoria
+        from io import StringIO
+        output = StringIO()
+        writer = csv.writer(output)
 
-        # Guardar en archivo CSV único con formato especial
-        with open(archivo_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
+        # Sección de configuración
+        writer.writerow(['[CONFIGURACION]'])
+        writer.writerow(['url', url])
+        writer.writerow(['game_pin', pin])
+        writer.writerow(['timeout_votacion', timeout])
+        writer.writerow(['puerto_serie', estado['puerto_nombre'] or ''])
 
-            # Sección de configuración
-            writer.writerow(['[CONFIGURACION]'])
-            writer.writerow(['url', url])
-            writer.writerow(['game_pin', pin])
-            writer.writerow(['timeout_votacion', timeout])
-            writer.writerow(['puerto_serie', estado['puerto_nombre'] or ''])
+        # Línea vacía como separador
+        writer.writerow([])
 
-            # Línea vacía como separador
-            writer.writerow([])
+        # Sección de alumnos
+        writer.writerow(['[ALUMNOS]'])
+        writer.writerow(['device_id', 'nombre_alumno', 'grupo', 'role'])
 
-            # Sección de alumnos
-            writer.writerow(['[ALUMNOS]'])
-            writer.writerow(['device_id', 'nombre_alumno', 'grupo', 'role'])
+        alumnos_guardados = 0
+        for alumno in alumnos_data:
+            writer.writerow([
+                alumno.get('id', ''),
+                alumno.get('nombre', ''),
+                alumno.get('grupo', ''),
+                alumno.get('role', '')
+            ])
+            alumnos_guardados += 1
 
-            alumnos_guardados = 0
-            for alumno in alumnos_data:
-                writer.writerow([
-                    alumno.get('id', ''),
-                    alumno.get('nombre', ''),
-                    alumno.get('grupo', ''),
-                    alumno.get('role', '')
-                ])
-                alumnos_guardados += 1
+        csv_content = output.getvalue()
+        output.close()
 
-        print(f"[Flask] ✅ Archivo guardado: {archivo_path}")
-        print(f"[Flask] ✅ Config + {alumnos_guardados} alumnos")
+        print(f"[Flask] ✅ CSV generado: {alumnos_guardados} alumnos")
 
         # Notificar a clientes web
         socketio.emit('log', {
             'nivel': 'INFO',
-            'msg': f"✅ Guardado en: {archivo_path}",
+            'msg': f"✅ Archivo generado: {nombre_archivo}.csv ({alumnos_guardados} alumnos)",
             'timestamp': utils.timestamp()
         })
 
-        return jsonify({
-            'status': 'ok',
-            'archivo': archivo_path,
-            'config_guardada': True,
-            'alumnos_guardados': alumnos_guardados
-        })
+        # Enviar como descarga
+        from flask import make_response
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename={nombre_archivo}.csv'
+        return response
 
     except Exception as e:
-        print(f"[Flask] Error guardando: {e}")
+        print(f"[Flask] Error generando CSV: {e}")
         import traceback
         traceback.print_exc()
 
         socketio.emit('log', {
             'nivel': 'ERROR',
-            'msg': f"Error guardando: {str(e)}",
+            'msg': f"Error generando archivo: {str(e)}",
             'timestamp': utils.timestamp()
         })
 
@@ -480,79 +478,78 @@ def desconectar_todos():
 
 @app.route('/api/cargar_config', methods=['POST'])
 def cargar_configuracion():
-    """Cargar configuración y alumnos desde un único archivo CSV"""
+    """Cargar configuración desde archivo CSV subido"""
     try:
-        data = request.json
-        nombre_archivo = data.get('nombre_archivo', 'config_default')
-
-        # Sanitizar nombre de archivo
-        nombre_archivo = ''.join(c for c in nombre_archivo if c.isalnum() or c in ('_', '-'))
-        archivo_path = os.path.join('data', f'{nombre_archivo}.csv')
-
-        print(f"[Flask] Cargando desde: {archivo_path}")
-
-        if not os.path.exists(archivo_path):
-            error_msg = f"Archivo no encontrado: {archivo_path}"
-            print(f"[Flask] ❌ {error_msg}")
-            socketio.emit('log', {
-                'nivel': 'ERROR',
-                'msg': error_msg,
-                'timestamp': utils.timestamp()
-            })
-            return jsonify({'error': error_msg}), 404
-
+        # Verificar que se envió un archivo
+        if 'file' not in request.files:
+            return jsonify({'error': 'No se envió ningún archivo'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'Archivo vacío'}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({'error': 'Solo se permiten archivos .csv'}), 400
+        
+        print(f"[Flask] Cargando archivo: {file.filename}")
+        
+        # Leer contenido del archivo
+        from io import StringIO
+        content = file.read().decode('utf-8')
+        csv_file = StringIO(content)
+        
         # Leer archivo CSV con formato especial
         config_cargada = {}
         alumnos_cargados = []
         seccion_actual = None
-
-        with open(archivo_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-
-            for row in reader:
-                if not row or len(row) == 0:
+        
+        reader = csv.reader(csv_file)
+        
+        for row in reader:
+            if not row or len(row) == 0:
+                continue
+            
+            # Detectar secciones
+            if row[0] == '[CONFIGURACION]':
+                seccion_actual = 'config'
+                print(f"[Flask] Leyendo sección [CONFIGURACION]")
+                continue
+            elif row[0] == '[ALUMNOS]':
+                seccion_actual = 'alumnos'
+                print(f"[Flask] Leyendo sección [ALUMNOS]")
+                continue
+            
+            # Procesar según sección
+            if seccion_actual == 'config' and len(row) >= 2:
+                key = row[0]
+                value = row[1]
+                config_cargada[key] = value
+                print(f"[Flask]   {key}: {value}")
+            
+            elif seccion_actual == 'alumnos' and len(row) >= 2:
+                # Saltar header
+                if row[0] == 'device_id':
                     continue
-
-                # Detectar secciones
-                if row[0] == '[CONFIGURACION]':
-                    seccion_actual = 'config'
-                    print(f"[Flask] Leyendo sección [CONFIGURACION]")
-                    continue
-                elif row[0] == '[ALUMNOS]':
-                    seccion_actual = 'alumnos'
-                    print(f"[Flask] Leyendo sección [ALUMNOS]")
-                    continue
-
-                # Procesar según sección
-                if seccion_actual == 'config' and len(row) >= 2:
-                    key = row[0]
-                    value = row[1]
-                    config_cargada[key] = value
-                    print(f"[Flask]   {key}: {value}")
-
-                elif seccion_actual == 'alumnos' and len(row) >= 2:
-                    # Saltar header
-                    if row[0] == 'device_id':
-                        continue
-
-                    device_id = row[0]
-                    nombre = row[1]
-                    grupo = row[2] if len(row) > 2 else ''
-                    role = row[3] if len(row) > 3 else ''
-
-                    if device_id:
-                        alumnos_cargados.append({
-                            'id': device_id,
-                            'nombre': nombre,
-                            'grupo': grupo,
-                            'role': role,
-                            'estado': 'offline'
-                        })
-                        print(f"[Flask]   Alumno: {nombre} [G{grupo}:{role}] ({device_id[:8]})")
-
+                
+                device_id = row[0]
+                nombre = row[1]
+                grupo = row[2] if len(row) > 2 else ''
+                role = row[3] if len(row) > 3 else ''
+                
+                if device_id:
+                    alumnos_cargados.append({
+                        'id': device_id,
+                        'nombre': nombre,
+                        'grupo': grupo,
+                        'role': role,
+                        'estado': 'offline'
+                    })
+                    print(f"[Flask]   Alumno: {nombre} [G{grupo}:{role}] ({device_id[:8]})")
+        
         print(f"[Flask] ✅ Config cargada: {len(config_cargada)} parámetros")
         print(f"[Flask] ✅ Alumnos cargados: {len(alumnos_cargados)}")
-
+        
         # Actualizar estado global
         with estado_lock:
             if 'url' in config_cargada:
@@ -561,9 +558,9 @@ def cargar_configuracion():
                 estado['game_pin'] = config_cargada['game_pin']
             if 'timeout_votacion' in config_cargada:
                 estado['timeout_votacion'] = int(config_cargada['timeout_votacion'])
-
+            
             estado['alumnos'] = alumnos_cargados
-
+            
             # Actualizar dispositivos conocidos
             for alumno in alumnos_cargados:
                 if alumno['id']:
@@ -576,7 +573,7 @@ def cargar_configuracion():
                         'cliente': None,
                         'conectado': False
                     }
-
+        
         # Emitir evento de carga completa
         socketio.emit('config_cargada', {
             'url': config_cargada.get('url', ''),
@@ -584,34 +581,33 @@ def cargar_configuracion():
             'timeout': config_cargada.get('timeout_votacion', 30),
             'alumnos': alumnos_cargados
         })
-
+        
         socketio.emit('log', {
             'nivel': 'INFO',
-            'msg': f"✅ Cargado: {archivo_path} ({len(alumnos_cargados)} alumnos)",
+            'msg': f"✅ Cargado: {file.filename} ({len(alumnos_cargados)} alumnos)",
             'timestamp': utils.timestamp()
         })
-
+        
         return jsonify({
             'status': 'ok',
-            'archivo': archivo_path,
-            'alumnos_cargados': len(alumnos_cargados)
+            'archivo': file.filename,
+            'alumnos_cargados': len(alumnos_cargados),
+            'url': config_cargada.get('url', ''),
+            'pin': config_cargada.get('game_pin', ''),
+            'timeout': config_cargada.get('timeout_votacion', 30)
         })
-
-    except FileNotFoundError:
-        error_msg = f"Archivo no encontrado: {archivo_path}"
-        print(f"[Flask] ❌ {error_msg}")
-        return jsonify({'error': error_msg}), 404
+    
     except Exception as e:
         print(f"[Flask] Error cargando: {e}")
         import traceback
         traceback.print_exc()
-
+        
         socketio.emit('log', {
             'nivel': 'ERROR',
-            'msg': f"Error cargando: {str(e)}",
+            'msg': f"Error cargando archivo: {str(e)}",
             'timestamp': utils.timestamp()
         })
-
+        
         return jsonify({'error': str(e)}), 500
 
 

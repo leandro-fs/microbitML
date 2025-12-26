@@ -349,6 +349,7 @@ function ocultarPanelPregunta() {
 // ============================================================================
 
 // Guardar TODO
+// GUARDAR: Descargar archivo CSV
 document.getElementById('guardar-todo-btn').addEventListener('click', async () => {
     const url = document.getElementById('url-input').value.trim();
     const pin = document.getElementById('pin-input').value.trim();
@@ -366,7 +367,7 @@ document.getElementById('guardar-todo-btn').addEventListener('click', async () =
     }
 
     try {
-        agregarLog('INFO', `Guardando en archivo: ${nombreArchivo}.csv`);
+        agregarLog('INFO', `Generando archivo: ${nombreArchivo}.csv`);
 
         const response = await fetch('/api/guardar_todo', {
             method: 'POST',
@@ -385,18 +386,32 @@ document.getElementById('guardar-todo-btn').addEventListener('click', async () =
             })
         });
 
-        const data = await response.json();
-
-        if (data.status === 'ok') {
-            agregarLog('INFO', `✅ Guardado en: ${data.archivo}`);
-            alert(`✅ Guardado exitoso en:\n${data.archivo}\n\nConfig + ${data.alumnos_guardados || 0} alumnos`);
+        if (response.ok) {
+            // Descargar archivo
+            const blob = await response.blob();
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `${nombreArchivo}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+            
+            // Guardar último nombre en localStorage
+            localStorage.setItem('ultimo_archivo', nombreArchivo);
+            
+            agregarLog('INFO', `✅ Archivo descargado: ${nombreArchivo}.csv`);
+            alert(`✅ Archivo descargado exitosamente:
+${nombreArchivo}.csv`);
         } else {
+            const data = await response.json();
             throw new Error(data.error || 'Error desconocido');
         }
     } catch (error) {
         console.error('Error guardando:', error);
         agregarLog('ERROR', `Error guardando: ${error.message}`);
-        alert('❌ Error guardando archivo');
+        alert('❌ Error generando archivo');
     }
 });
 
@@ -507,39 +522,62 @@ document.getElementById('descubrir-btn').addEventListener('click', async () => {
 });
 
 // Cargar configuración
-document.getElementById('cargar-config-btn').addEventListener('click', async () => {
-    const nombreArchivo = document.getElementById('nombre-archivo-input').value.trim();
+// CARGAR: Upload de archivo CSV
+document.getElementById('cargar-config-btn').addEventListener('click', () => {
+    // Crear input file dinámicamente
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        agregarLog('INFO', `Cargando archivo: ${file.name}`);
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch('/api/cargar_config', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'ok') {
+                // Actualizar campos con datos cargados
+                if (data.url) document.getElementById('url-input').value = data.url;
+                if (data.pin) document.getElementById('pin-input').value = data.pin;
+                if (data.timeout) document.getElementById('timeout-input').value = data.timeout;
+                
+                // Extraer nombre base del archivo (sin .csv)
+                const nombreBase = file.name.replace('.csv', '');
+                document.getElementById('nombre-archivo-input').value = nombreBase;
+                
+                // Guardar en localStorage
+                localStorage.setItem('ultimo_archivo', nombreBase);
+                
+                agregarLog('INFO', `✅ Cargado: ${file.name}`);
+                agregarLog('INFO', `Config cargada + ${data.alumnos_cargados || 0} alumnos`);
+                alert(`✅ Archivo cargado exitosamente:
+${file.name}
 
-    if (!nombreArchivo) {
-        alert('Por favor ingresa el nombre del archivo a cargar');
-        return;
-    }
-
-    agregarLog('INFO', `Cargando desde archivo: ${nombreArchivo}.csv`);
-
-    try {
-        const response = await fetch('/api/cargar_config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                nombre_archivo: nombreArchivo
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.status === 'ok') {
-            agregarLog('INFO', `✅ Cargado desde: ${data.archivo}`);
-            agregarLog('INFO', `Config cargada + ${data.alumnos_cargados || 0} alumnos`);
-            alert(`✅ Archivo cargado:\n${data.archivo}\n\nConfig + ${data.alumnos_cargados || 0} alumnos`);
-        } else {
-            throw new Error(data.error || 'Error desconocido');
+Config + ${data.alumnos_cargados || 0} alumnos`);
+            } else {
+                throw new Error(data.error || 'Error desconocido');
+            }
+        } catch (error) {
+            console.error('Error cargando config:', error);
+            agregarLog('ERROR', `Error cargando: ${error.message}`);
+            alert(`❌ Error cargando archivo:
+${error.message}`);
         }
-    } catch (error) {
-        console.error('Error cargando config:', error);
-        agregarLog('ERROR', `Error cargando: ${error.message}`);
-        alert(`❌ Error cargando archivo:\n${error.message}`);
-    }
+    };
+    
+    // Trigger file dialog
+    input.click();
 });
 
 // Finalizar votación
@@ -603,6 +641,13 @@ document.getElementById('log-container').addEventListener('click', () => {
 
 window.addEventListener('load', async () => {
     agregarLog('INFO', 'Interface web cargada');
+    
+    // Cargar último nombre de archivo desde localStorage
+    const ultimoArchivo = localStorage.getItem('ultimo_archivo');
+    if (ultimoArchivo) {
+        document.getElementById('nombre-archivo-input').value = ultimoArchivo;
+        agregarLog('INFO', `Último archivo recordado: ${ultimoArchivo}.csv`);
+    }
     
     try {
         const response = await fetch('/api/config');

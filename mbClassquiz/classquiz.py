@@ -32,13 +32,11 @@ class ClassQuiz:
             self.config.save()
             self.log('CFG:Corregido_grupo=0_a_grupo=1')
         
-        # Estado votacion
-        self.vote_config = ConfigManager(
-            config_file='vote.cfg',
-            roles=[],
-            extra_fields={'tipo': None, 'num_opciones': 4, 'opcion': None, 'confirmada': False}
-        )
-        self.vote_config.load()
+        # Estado votacion NUEVO
+        self.tipo_pregunta = None  # "unica" o "multiple"
+        self.num_opciones = 4
+        self.opcion_actual_idx = 0  # Cursor navegacion
+        self.seleccionadas = []  # [False, False, False, False]
         
         # Estado
         self.registrado = False
@@ -59,8 +57,8 @@ class ClassQuiz:
     def cmd_id_with_group(self, grupo, role):
         return self.msg_handler.command("ID", self.device_id, grupo, role)
     
-    def cmd_answer_with_group(self, grupo, role, opcion):
-        return self.msg_handler.command("ANSWER", self.device_id, grupo, role, opcion)
+    def cmd_answer_with_group(self, grupo, role, respuesta):
+        return self.msg_handler.command("ANSWER", self.device_id, grupo, role, respuesta)
     
     def log(self, mensaje):
         try:
@@ -110,15 +108,19 @@ class ClassQuiz:
     def procesar_qparams(self, mensaje):
         tipo, num_str = self.msg_handler.extract_qparams(mensaje)
         if tipo and num_str is not None:
-            self.vote_config.set('tipo', tipo)
-            self.vote_config.set('num_opciones', num_str)
-            self.vote_config.set('opcion', None)
-            self.vote_config.set('confirmada', False)
-            self.vote_config.save()
+            self.tipo_pregunta = tipo
+            self.num_opciones = num_str
+            
+            # Reiniciar estado votacion
+            self.opcion_actual_idx = 0
+            self.seleccionadas = [False] * self.num_opciones
+            
             self.log("QPARAMS:{}:{}".format(tipo, num_str))
             display.show(Image.ARROW_E)
             sleep(300)
-            display.clear()
+            
+            # Mostrar opcion inicial
+            self.mostrar_estado_votacion()
     
     def procesar_poll(self, mensaje):
         tipo, args = self.msg_handler.parse_payload(mensaje)
@@ -136,15 +138,22 @@ class ClassQuiz:
                 self.log("POLL_NO_MATCH:ignorando")
     
     def enviar_respuesta(self):
-        opcion = self.vote_config.get('opcion')
-        if opcion is None:
-            opcion = ""
+        # Generar string respuesta
+        opciones_letras = ['A', 'B', 'C', 'D']
+        respuestas = []
+        
+        for i in range(len(self.seleccionadas)):
+            if self.seleccionadas[i]:
+                respuestas.append(opciones_letras[i])
+        
+        respuesta_str = ','.join(respuestas) if respuestas else ""
+        
         grupo = self.config.get('grupo')
         role = self.config.get('role')
-        comando = self.cmd_answer_with_group(grupo, role, opcion)
+        comando = self.cmd_answer_with_group(grupo, role, respuesta_str)
         self.log("TX_CMD:{}".format(comando))
         self.msg_handler.send(radio.send, comando)
-        self.log("TX:ANSWER:G{}:{}:{}".format(grupo, role, opcion))
+        self.log("TX:ANSWER:G{}:{}:{}".format(grupo, role, respuesta_str))
         display.show(Image.ARROW_W)
         sleep(200)
         display.clear()
@@ -155,44 +164,47 @@ class ClassQuiz:
             self.msg_handler.send(radio.send, self.msg_handler.cmd_pong())
             self.log("TX:PONG")
     
-    def navegar_opcion(self, direccion):
-        if self.vote_config.get('confirmada'):
-            return
-        opcion_actual = self.vote_config.get('opcion')
-        num_opciones = self.vote_config.get('num_opciones')
-        opciones = ['A', 'B', 'C', 'D'][:num_opciones]
-        if opcion_actual is None:
-            idx = 0
-        else:
-            try:
-                idx = opciones.index(opcion_actual)
-            except:
-                idx = 0
-        if direccion == 1:
-            idx = (idx + 1) % len(opciones)
-        else:
-            idx = (idx - 1) % len(opciones)
-        self.vote_config.set('opcion', opciones[idx])
-        self.vote_config.save()
-        display.show(opciones[idx])
-        sleep(300)
-        display.clear()
+    def navegar_opcion(self):
+        """Boton A: Avanza cursor"""
+        self.opcion_actual_idx = (self.opcion_actual_idx + 1) % self.num_opciones
+        self.log('NAV:{}'.format(['A','B','C','D'][self.opcion_actual_idx]))
+        self.mostrar_estado_votacion()
     
-    def confirmar_voto(self):
-        if self.vote_config.get('opcion') is not None:
-            self.vote_config.set('confirmada', True)
-            self.vote_config.save()
+    def toggle_seleccion(self):
+        """Boton B: Toggle seleccion en cursor actual"""
+        idx = self.opcion_actual_idx
+        
+        # Toggle
+        self.seleccionadas[idx] = not self.seleccionadas[idx]
+        
+        # Si es "unica" y acabamos de seleccionar, deseleccionar resto
+        if self.tipo_pregunta == "unica" and self.seleccionadas[idx]:
+            for i in range(len(self.seleccionadas)):
+                if i != idx:
+                    self.seleccionadas[i] = False
+        
+        # Feedback visual
+        if self.seleccionadas[idx]:
             display.show(Image.YES)
-            sleep(500)
-            display.clear()
+            self.log('SELECT:{}'.format(['A','B','C','D'][idx]))
+        else:
+            display.show(Image.NO)
+            self.log('DESELECT:{}'.format(['A','B','C','D'][idx]))
+        
+        sleep(400)
+        self.mostrar_estado_votacion()
     
-    def resetear_voto(self):
-        self.vote_config.set('opcion', None)
-        self.vote_config.set('confirmada', False)
-        self.vote_config.save()
-        display.show(Image.NO)
-        sleep(300)
-        display.clear()
+    def mostrar_estado_votacion(self):
+        """Muestra letra actual, con indicator si esta seleccionada"""
+        letra = ['A', 'B', 'C', 'D'][self.opcion_actual_idx]
+        
+        # Mostrar letra base
+        display.show(letra)
+        
+        # Si esta seleccionada, parpadear pixel central
+        if self.seleccionadas[self.opcion_actual_idx]:
+            sleep(150)
+            display.set_pixel(2, 2, 9)
     
     def manejar_modo_config(self):
         if pin1.is_touched():
@@ -251,24 +263,30 @@ class ClassQuiz:
                 self.procesar_ping(data)
     
     def manejar_votacion(self):
-        if self.registrado:
+        if self.registrado and self.tipo_pregunta is not None:
+            # Boton A: Navegar
             if button_a.was_pressed():
                 self.log('BTN:A')
-                self.navegar_opcion(1)
+                self.navegar_opcion()
+                while button_a.is_pressed():
+                    sleep(50)
             
+            # Boton B: Toggle seleccion
             if button_b.was_pressed():
                 self.log('BTN:B')
-                self.navegar_opcion(-1)
-            
-            if button_a.is_pressed() and button_b.is_pressed():
-                self.log('BTN:A+B')
-                self.confirmar_voto()
-                sleep(500)
+                self.toggle_seleccion()
+                while button_b.is_pressed():
+                    sleep(50)
+        
+        elif self.registrado:
+            # Sin pregunta activa, mostrar config
+            if button_a.was_pressed() or button_b.was_pressed():
+                self.mostrar_config()
+        
         else:
-            a = button_a.was_pressed()
-            b = button_b.was_pressed()
-            if a or b:
-                self.log('BTN:' + ('A' if a else '') + ('B' if b else ''))
+            # No registrado
+            if button_a.was_pressed() or button_b.was_pressed():
+                self.log('BTN:No_registrado')
                 self.mostrar_config()
     
     def run(self):

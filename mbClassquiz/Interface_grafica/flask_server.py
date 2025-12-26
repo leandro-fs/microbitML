@@ -439,10 +439,10 @@ def desconectar_todos():
     for device_id, info in dispositivos_a_limpiar:
         try:
             # Cerrar socket si existe
-            if 'socket' in info and info['socket']:
+            if 'cliente' in info and info['cliente']:
                 try:
-                    info['socket'].disconnect()
-                    print(f"[Flask]   ✓ Socket cerrado: {info.get('nombre', device_id[:8])}")
+                    info['cliente'].disconnect()
+                    print(f"[Flask]   ✓ Cliente cerrado: {info.get('nombre', device_id[:8])}")
                     sockets_cerrados += 1
                 except Exception as e:
                     print(f"[Flask]   ✗ Error cerrando socket {device_id[:8]}: {e}")
@@ -452,14 +452,14 @@ def desconectar_todos():
     # PASO 2: Limpiar estado de cada dispositivo (pero mantenerlos registrados)
     with estado_lock:
         for device_id in estado['dispositivos']:
-            estado['dispositivos'][device_id]['socket'] = None
+            estado['dispositivos'][device_id]['cliente'] = None
             estado['dispositivos'][device_id]['estado'] = 'registrado'
         
         # Limpiar estado de votación
         estado['votacion_activa'] = False
         estado['pregunta_actual'] = None
         
-        print(f"[Flask] ✅ Sockets cerrados: {sockets_cerrados}/{num_dispositivos}")
+        print(f"[Flask] ✅ Clientes cerrados: {sockets_cerrados}/{num_dispositivos}")
         print(f"[Flask] ✅ Dispositivos limpiados: {num_dispositivos}")
         print(f"[Flask] ✅ Estado reseteado - Listos para reconexión")
     
@@ -572,7 +572,9 @@ def cargar_configuracion():
                         'nombre': alumno['nombre'],
                         'grupo': alumno['grupo'],
                         'role': alumno['role'],
-                        'estado': 'registrado'
+                        'estado': 'registrado',
+                        'cliente': None,
+                        'conectado': False
                     }
 
         # Emitir evento de carga completa
@@ -846,7 +848,9 @@ def procesar_new_device(data):
             'grupo': grupo,
             'role': role,
             'estado': 'registrado',
-            'pendiente': True
+            'pendiente': True,
+            'cliente': None,
+            'conectado': False
         }
     
     socketio.emit('log', {

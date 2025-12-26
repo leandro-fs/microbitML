@@ -60,7 +60,6 @@ class Concentrador:
         return (dev, grp, rl, opciones)
     
     def enviar_usb(self, mensaje):
-        print(mensaje)
         uart.write(mensaje + "\n")
     
     def cargar_dispositivos(self):

@@ -1,5 +1,6 @@
 # flask_server.py - Servidor Flask con API REST y WebSocket
-# Sistema Proxy Microbit-ClassQuiz
+# Sistema Proxy Microbit-ClassQuiz v1.2
+# ACTUALIZADO: Desconexión previa + Sincronización nombres + Config dinámica
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
@@ -32,7 +33,7 @@ estado = {
     'url_classquiz': config.DEFAULT_URL_CLASSQUIZ,
     'game_pin': config.DEFAULT_GAME_PIN,
     'timeout_votacion': config.DEFAULT_TIMEOUT,
-    'dispositivos': {},  # {device_id: {nombre, estado, socket}}
+    'dispositivos': {},  # {device_id: {nombre, grupo, role, estado, socket}}
     'pregunta_actual': None,
     'alumnos': [],
     'votacion_activa': False
@@ -94,7 +95,7 @@ def guardar_todo():
             estado['alumnos'] = alumnos_data
             nombre_archivo = data.get('nombre_archivo', 'config_default')
 
-        # Sanitizar nombre de archivo (remover caracteres peligrosos)
+        # Sanitizar nombre de archivo
         nombre_archivo = ''.join(c for c in nombre_archivo if c.isalnum() or c in ('_', '-'))
         archivo_path = os.path.join('data', f'{nombre_archivo}.csv')
 
@@ -121,13 +122,15 @@ def guardar_todo():
 
             # Sección de alumnos
             writer.writerow(['[ALUMNOS]'])
-            writer.writerow(['device_id', 'nombre_alumno'])
+            writer.writerow(['device_id', 'nombre_alumno', 'grupo', 'role'])
 
             alumnos_guardados = 0
             for alumno in alumnos_data:
                 writer.writerow([
                     alumno.get('id', ''),
-                    alumno.get('nombre', '')
+                    alumno.get('nombre', ''),
+                    alumno.get('grupo', ''),
+                    alumno.get('role', '')
                 ])
                 alumnos_guardados += 1
 
@@ -254,13 +257,15 @@ def guardar_alumnos():
         utils.crear_directorio_data()
         
         with open(config.ALUMNOS_FILE, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['device_id', 'nombre_alumno'])
+            writer = csv.DictWriter(f, fieldnames=['device_id', 'nombre_alumno', 'grupo', 'role'])
             writer.writeheader()
             
             for alumno in estado['alumnos']:
                 writer.writerow({
                     'device_id': alumno.get('id', ''),
-                    'nombre_alumno': alumno.get('nombre', '')
+                    'nombre_alumno': alumno.get('nombre', ''),
+                    'grupo': alumno.get('grupo', ''),
+                    'role': alumno.get('role', '')
                 })
         
         socketio.emit('log', {
@@ -277,49 +282,112 @@ def guardar_alumnos():
 
 @app.route('/api/conectar_classquiz', methods=['POST'])
 def conectar_classquiz():
-    """Conectar todos los dispositivos detectados a ClassQuiz"""
+    """
+    Conectar todos los dispositivos detectados a ClassQuiz.
+    ⭐ ACTUALIZADO: Desconecta sesión anterior primero.
+    """
     try:
+        # Obtener configuración desde el request
+        data = request.json or {}
+        
+        url = data.get('url')
+        pin = data.get('pin')
+        timeout = data.get('timeout')
+        
+        # Validar parámetros
+        if not url or not pin:
+            error_msg = 'URL y PIN son obligatorios'
+            print(f"[Flask] ❌ {error_msg}")
+            socketio.emit('log', {
+                'nivel': 'ERROR',
+                'msg': error_msg,
+                'timestamp': utils.timestamp()
+            })
+            return jsonify({'error': error_msg}), 400
+        
+        # Validar formato
+        if not utils.validar_url(url):
+            error_msg = f'URL inválida: {url}'
+            print(f"[Flask] ❌ {error_msg}")
+            socketio.emit('log', {
+                'nivel': 'ERROR',
+                'msg': error_msg,
+                'timestamp': utils.timestamp()
+            })
+            return jsonify({'error': error_msg}), 400
+        
+        if not utils.validar_pin(pin):
+            error_msg = f'PIN inválido: {pin}'
+            print(f"[Flask] ❌ {error_msg}")
+            socketio.emit('log', {
+                'nivel': 'ERROR',
+                'msg': error_msg,
+                'timestamp': utils.timestamp()
+            })
+            return jsonify({'error': error_msg}), 400
+        
+        # Actualizar estado con valores recibidos
         with estado_lock:
+            estado['url_classquiz'] = url
+            estado['game_pin'] = pin
+            if timeout:
+                estado['timeout_votacion'] = int(timeout)
+            
             num_dispositivos = len(estado['dispositivos'])
-            url = estado['url_classquiz']
-            pin = estado['game_pin']
             dispositivos_list = list(estado['dispositivos'].items())
 
         print("=" * 80)
-        print("[Flask] INICIANDO CONEXIÓN A CLASSQUIZ")
+        print("[Flask] PREPARANDO CONEXIÓN A CLASSQUIZ")
         print("=" * 80)
         print(f"[Flask] URL ClassQuiz: {url}")
         print(f"[Flask] Game PIN: {pin}")
+        print(f"[Flask] Timeout: {timeout}s")
         print(f"[Flask] Total dispositivos: {num_dispositivos}")
+        print("=" * 80)
+
+        if num_dispositivos == 0:
+            error_msg = 'No hay dispositivos detectados. Presiona "Descubrir" primero.'
+            socketio.emit('log', {
+                'nivel': 'ERROR',
+                'msg': error_msg,
+                'timestamp': utils.timestamp()
+            })
+            return jsonify({'error': error_msg}), 400
+
+        # ⭐ PASO 1: DESCONECTAR SESIÓN ANTERIOR
+        print("[Flask] PASO 1/2: Desconectando sesión anterior...")
+        socketio.emit('log', {
+            'nivel': 'INFO',
+            'msg': '🔌 Paso 1/2: Desconectando sesión anterior...',
+            'timestamp': utils.timestamp()
+        })
+        
+        desconectar_todos()
+        
+        # Pausa para asegurar desconexión completa
+        time.sleep(0.5)
+        
+        socketio.emit('log', {
+            'nivel': 'INFO',
+            'msg': '✅ Sesión anterior cerrada. Iniciando nueva conexión...',
+            'timestamp': utils.timestamp()
+        })
+        
+        # ⭐ PASO 2: CONECTAR CON NUEVA CONFIGURACIÓN
+        print("[Flask] PASO 2/2: Conectando con nueva configuración...")
         print("-" * 80)
         print("[Flask] LISTA DE ALUMNOS A CONECTAR:")
         for idx, (dev_id, info) in enumerate(dispositivos_list, 1):
             nombre = info.get('nombre', f'Sin nombre ({dev_id[:8]})')
-            print(f"[Flask]   {idx}. {nombre}")
+            grupo = info.get('grupo', '?')
+            role = info.get('role', '?')
+            print(f"[Flask]   {idx}. {nombre} [G{grupo}:{role}]")
             print(f"[Flask]      Device ID: {dev_id}")
         print("=" * 80)
 
-        if num_dispositivos == 0:
-            socketio.emit('log', {
-                'nivel': 'ERROR',
-                'msg': 'No hay dispositivos detectados. Presiona "Descubrir" primero.',
-                'timestamp': utils.timestamp()
-            })
-            return jsonify({'error': 'No hay dispositivos detectados'}), 400
-
-        # Validar configuración
-        if not url or not pin:
-            socketio.emit('log', {
-                'nivel': 'ERROR',
-                'msg': 'Configure URL y PIN en la pestaña Configuración primero.',
-                'timestamp': utils.timestamp()
-            })
-            return jsonify({'error': 'Configure URL y PIN primero'}), 400
-
-        # Conectar dispositivos
         socketio.emit('log', {
             'nivel': 'INFO',
-            'msg': f"Iniciando conexión de {num_dispositivos} dispositivo(s) a {url}...",
+            'msg': f"🔗 Paso 2/2: Conectando {num_dispositivos} dispositivo(s) a {url} (PIN: {pin})...",
             'timestamp': utils.timestamp()
         })
 
@@ -327,11 +395,16 @@ def conectar_classquiz():
 
         socketio.emit('log', {
             'nivel': 'INFO',
-            'msg': f"Comandos de conexión enviados. Verifica logs para confirmar conexiones.",
+            'msg': f"✅ Conexión completada. Verifica logs para confirmar cada dispositivo.",
             'timestamp': utils.timestamp()
         })
 
-        return jsonify({'status': 'ok', 'count': num_dispositivos})
+        return jsonify({
+            'status': 'ok',
+            'count': num_dispositivos,
+            'url': url,
+            'pin': pin
+        })
 
     except Exception as e:
         print(f"[Flask] ERROR en conectar_classquiz: {e}")
@@ -345,6 +418,64 @@ def conectar_classquiz():
         })
 
         return jsonify({'error': str(e)}), 500
+
+
+def desconectar_todos():
+    """
+    ⭐ Desconectar y limpiar sesión anterior COMPLETAMENTE.
+    - Cierra todos los sockets de ClassQuiz activos
+    - Limpia el estado de conexión de cada dispositivo
+    - Mantiene los dispositivos detectados para reconectarlos
+    """
+    print("[Flask] 🧹 Limpiando sesión anterior...")
+    
+    with estado_lock:
+        dispositivos_a_limpiar = list(estado['dispositivos'].items())
+        num_dispositivos = len(dispositivos_a_limpiar)
+    
+    sockets_cerrados = 0
+    
+    # PASO 1: Cerrar todos los sockets de ClassQuiz
+    for device_id, info in dispositivos_a_limpiar:
+        try:
+            # Cerrar socket si existe
+            if 'socket' in info and info['socket']:
+                try:
+                    info['socket'].disconnect()
+                    print(f"[Flask]   ✓ Socket cerrado: {info.get('nombre', device_id[:8])}")
+                    sockets_cerrados += 1
+                except Exception as e:
+                    print(f"[Flask]   ✗ Error cerrando socket {device_id[:8]}: {e}")
+        except Exception as e:
+            print(f"[Flask] Error procesando {device_id[:8]}: {e}")
+    
+    # PASO 2: Limpiar estado de cada dispositivo (pero mantenerlos registrados)
+    with estado_lock:
+        for device_id in estado['dispositivos']:
+            estado['dispositivos'][device_id]['socket'] = None
+            estado['dispositivos'][device_id]['estado'] = 'registrado'
+        
+        # Limpiar estado de votación
+        estado['votacion_activa'] = False
+        estado['pregunta_actual'] = None
+        
+        print(f"[Flask] ✅ Sockets cerrados: {sockets_cerrados}/{num_dispositivos}")
+        print(f"[Flask] ✅ Dispositivos limpiados: {num_dispositivos}")
+        print(f"[Flask] ✅ Estado reseteado - Listos para reconexión")
+    
+    # Notificar al frontend con dispositivos limpios
+    with estado_lock:
+        dispositivos_list = list(estado['dispositivos'].values())
+    
+    socketio.emit('dispositivos_actualizados', {
+        'dispositivos': dispositivos_list
+    })
+    
+    socketio.emit('log', {
+        'nivel': 'INFO',
+        'msg': f"🧹 Sesión limpiada: {sockets_cerrados} conexión(es) cerradas, {num_dispositivos} dispositivos reseteados",
+        'timestamp': utils.timestamp()
+    })
 
 
 @app.route('/api/cargar_config', methods=['POST'])
@@ -406,14 +537,18 @@ def cargar_configuracion():
 
                     device_id = row[0]
                     nombre = row[1]
+                    grupo = row[2] if len(row) > 2 else ''
+                    role = row[3] if len(row) > 3 else ''
 
                     if device_id:
                         alumnos_cargados.append({
                             'id': device_id,
                             'nombre': nombre,
+                            'grupo': grupo,
+                            'role': role,
                             'estado': 'offline'
                         })
-                        print(f"[Flask]   Alumno: {nombre} ({device_id[:8]})")
+                        print(f"[Flask]   Alumno: {nombre} [G{grupo}:{role}] ({device_id[:8]})")
 
         print(f"[Flask] ✅ Config cargada: {len(config_cargada)} parámetros")
         print(f"[Flask] ✅ Alumnos cargados: {len(alumnos_cargados)}")
@@ -435,6 +570,8 @@ def cargar_configuracion():
                     estado['dispositivos'][alumno['id']] = {
                         'id': alumno['id'],
                         'nombre': alumno['nombre'],
+                        'grupo': alumno['grupo'],
+                        'role': alumno['role'],
                         'estado': 'registrado'
                     }
 
@@ -588,30 +725,53 @@ def handle_finalizar_votacion():
         })
 
 
+@socketio.on('actualizar_nombre')
+def handle_actualizar_nombre(data):
+    """Actualizar nombre de dispositivo desde frontend"""
+    device_id = data.get('device_id')
+    nuevo_nombre = data.get('nombre', '').strip()
+    
+    if not device_id or not nuevo_nombre:
+        return
+    
+    with estado_lock:
+        if device_id in estado['dispositivos']:
+            nombre_anterior = estado['dispositivos'][device_id].get('nombre', '(sin nombre)')
+            estado['dispositivos'][device_id]['nombre'] = nuevo_nombre
+            
+            grupo = estado['dispositivos'][device_id].get('grupo', '?')
+            role = estado['dispositivos'][device_id].get('role', '?')
+            
+            print(f"[Flask] Nombre actualizado: {nombre_anterior} → {nuevo_nombre} [G{grupo}:{role}]")
+            
+            socketio.emit('log', {
+                'nivel': 'INFO',
+                'msg': f"✏️ Nombre actualizado: {nuevo_nombre} [G{grupo}:{role}]",
+                'timestamp': utils.timestamp()
+            })
+
+
 # ============================================================================
 # PROCESAMIENTO MENSAJES USB
 # ============================================================================
 
 def procesar_mensaje_usb(mensaje):
-    """
-    Callback desde main.py cuando llega mensaje USB.
-    Esta función procesa los mensajes JSON del concentrador.
-    """
+    """Callback desde main.py cuando llega mensaje USB"""
     try:
-        # Intentar parsear como JSON
         data = json.loads(mensaje)
         tipo = data.get('type')
         
-        # Log de depuración
         socketio.emit('log', {
             'nivel': 'DEBUG',
             'msg': f"USB←Conc: {mensaje[:100]}",
             'timestamp': utils.timestamp()
         })
         
-        # Procesar según tipo de mensaje
-        if tipo == 'device_list':
-            procesar_device_list(data)
+        if tipo == 'new_device':
+            procesar_new_device(data)
+        
+        elif tipo == 'discovery_end':
+            procesar_discovery_end(data)
         
         elif tipo == 'answer':
             procesar_answer(data)
@@ -656,65 +816,97 @@ def procesar_mensaje_usb(mensaje):
         })
 
 
-def procesar_device_list(data):
-    """Procesa lista de dispositivos detectados"""
-    devices = data.get('devices', [])
+def procesar_new_device(data):
+    """Procesa nuevo dispositivo detectado"""
+    device_id = data.get('device_id')
+    grupo = data.get('grupo', 0)
+    role = data.get('role', '?')
     
-    print(f"[Flask] Dispositivos detectados: {len(devices)}")
+    print(f"[Flask] Nuevo dispositivo: {role} G{grupo} → {device_id[:8]}")
     
     with estado_lock:
-        for dev_id in devices:
-            if dev_id not in estado['dispositivos']:
-                # Buscar nombre en alumnos cargados
-                nombre = None
-                for a in estado['alumnos']:
-                    if a.get('id') == dev_id:
-                        nombre = a.get('nombre')
-                        break
-                
-                if not nombre:
-                    nombre = f"Alumno_{dev_id[-4:]}"
-                
-                estado['dispositivos'][dev_id] = {
-                    'id': dev_id,
-                    'nombre': nombre,
-                    'estado': 'registrado'
-                }
-                
-                print(f"[Flask] Nuevo dispositivo: {dev_id[:8]} → {nombre}")
+        # Buscar nombre en alumnos cargados
+        nombre = None
+        for alumno in estado['alumnos']:
+            if alumno.get('id') == device_id:
+                nombre = alumno.get('nombre')
+                break
+        
+        # Si no tiene nombre, generar uno temporal
+        if not nombre:
+            from random import choice
+            nombres_random = ["Luna", "Sol", "Estrella", "Cometa", "Nebulosa", 
+                             "Galaxia", "Pulsar", "Quasar", "Asteroid", "Meteor"]
+            nombre = f"{choice(nombres_random)}_{role}G{grupo}"
+        
+        # Registrar dispositivo
+        estado['dispositivos'][device_id] = {
+            'id': device_id,
+            'nombre': nombre,
+            'grupo': grupo,
+            'role': role,
+            'estado': 'registrado',
+            'pendiente': True
+        }
     
-    # Emitir actualización
+    socketio.emit('log', {
+        'nivel': 'INFO',
+        'msg': f"Detectado: {nombre} [G{grupo}:{role}]",
+        'timestamp': utils.timestamp()
+    })
+
+
+def procesar_discovery_end(data):
+    """Procesa fin de descubrimiento"""
+    total = data.get('total', 0)
+    
+    print(f"[Flask] Descubrimiento completo: {total} dispositivos")
+    
+    with estado_lock:
+        dispositivos_list = list(estado['dispositivos'].values())
+    
     socketio.emit('dispositivos_actualizados', {
-        'dispositivos': list(estado['dispositivos'].values())
+        'dispositivos': dispositivos_list
     })
     
     socketio.emit('log', {
         'nivel': 'INFO',
-        'msg': f"Descubrimiento completo: {len(devices)} dispositivo(s)",
+        'msg': f"✅ Descubrimiento completo: {total} dispositivo(s) detectado(s)",
         'timestamp': utils.timestamp()
     })
-
-    # NOTA: La conexión a ClassQuiz ahora es manual mediante el botón "Conectar a ClassQuiz"
+    
+    print("[Flask] Lista de dispositivos detectados:")
+    for dev_id, info in estado['dispositivos'].items():
+        print(f"[Flask]   - {info['nombre']} [G{info['grupo']}:{info['role']}] ({dev_id[:8]})")
 
 
 def procesar_answer(data):
     """Procesa respuesta de estudiante"""
     device_id = data.get('device_id')
+    grupo = data.get('grupo', 0)
+    role = data.get('role', '?')
     respuesta = data.get('answer')
     
     with estado_lock:
-        nombre = estado['dispositivos'].get(device_id, {}).get('nombre', device_id[:8])
+        info = estado['dispositivos'].get(device_id, {})
+        nombre = info.get('nombre', device_id[:8])
     
-    print(f"[Flask] Respuesta recibida: {nombre} → {respuesta}")
+    print(f"[Flask] Respuesta: {nombre} [G{grupo}:{role}] → {respuesta}")
     
-    # Emitir a frontend
     socketio.emit('respuesta_recibida', {
         'device_id': device_id,
         'nombre': nombre,
+        'grupo': grupo,
+        'role': role,
         'respuesta': respuesta
     })
     
-    # Enviar a ClassQuiz
+    socketio.emit('log', {
+        'nivel': 'INFO',
+        'msg': f"Respuesta: {nombre} [G{grupo}:{role}] → '{respuesta}'",
+        'timestamp': utils.timestamp()
+    })
+    
     socketio_manager.enviar_respuesta(device_id, respuesta, estado)
 
 
@@ -748,10 +940,7 @@ def guardar_config():
 
 
 def run_server():
-    """
-    Ejecutar servidor Flask.
-    Llamado desde main.py en thread separado.
-    """
+    """Ejecutar servidor Flask"""
     print(f"[Flask] Iniciando servidor en http://{config.FLASK_HOST}:{config.FLASK_PORT}")
     
     socketio.run(
@@ -759,6 +948,6 @@ def run_server():
         debug=False,
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
-        use_reloader=False,  # Crítico para threads
+        use_reloader=False,
         log_output=False
     )

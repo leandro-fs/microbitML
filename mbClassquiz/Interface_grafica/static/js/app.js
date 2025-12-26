@@ -1,5 +1,6 @@
 // app.js - Lógica frontend del sistema
-// Sistema Proxy Microbit-ClassQuiz
+// Sistema Proxy Microbit-ClassQuiz v1.2
+// ACTUALIZADO: Desconexión previa + Sincronización nombres + Config dinámica
 
 // ============================================================================
 // CONEXIÓN SOCKET.IO
@@ -41,13 +42,27 @@ socket.on('log', (data) => {
 });
 
 socket.on('dispositivos_actualizados', (data) => {
-    state.dispositivos = data.dispositivos;
+    // Convertir array a objeto con device_id como key
+    const nuevosDispositivos = {};
+    
+    if (Array.isArray(data.dispositivos)) {
+        data.dispositivos.forEach(disp => {
+            const id = disp.id || disp.device_id;
+            if (id) {
+                nuevosDispositivos[id] = disp;
+            }
+        });
+    }
+    
+    state.dispositivos = nuevosDispositivos;
     actualizarTablaDispositivos();
     actualizarEstadisticas();
 });
 
 socket.on('respuesta_recibida', (data) => {
-    agregarLog('INFO', `Respuesta recibida: ${data.nombre} → ${data.respuesta}`);
+    const grupo = data.grupo || '?';
+    const role = data.role || '?';
+    agregarLog('INFO', `Respuesta: ${data.nombre} [G${grupo}:${role}] → ${data.respuesta}`);
     actualizarRespuestaEnLista(data.device_id, data.nombre, data.respuesta);
 });
 
@@ -71,13 +86,14 @@ socket.on('config_cargada', (data) => {
 
     // Actualizar dispositivos desde alumnos
     if (data.alumnos && Array.isArray(data.alumnos)) {
-        // Convertir array de alumnos a objeto de dispositivos
         const nuevosDispositivos = {};
         data.alumnos.forEach(alumno => {
             if (alumno.id) {
                 nuevosDispositivos[alumno.id] = {
                     id: alumno.id,
                     nombre: alumno.nombre,
+                    grupo: alumno.grupo || '',
+                    role: alumno.role || '',
                     estado: alumno.estado || 'offline'
                 };
             }
@@ -173,7 +189,7 @@ function actualizarTablaDispositivos() {
     
     if (dispositivos.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="3" class="text-center text-muted">No hay dispositivos registrados</td>';
+        tr.innerHTML = '<td colspan="5" class="text-center text-muted">No hay dispositivos registrados</td>';
         tbody.appendChild(tr);
         return;
     }
@@ -181,12 +197,13 @@ function actualizarTablaDispositivos() {
     dispositivos.forEach(([device_id, info]) => {
         const tr = document.createElement('tr');
         
-        // Device ID
+        // Device ID (acortado)
         const tdId = document.createElement('td');
-        tdId.className = 'text-monospace';
-        tdId.textContent = device_id;
+        tdId.className = 'text-monospace small';
+        tdId.textContent = device_id.substring(0, 8) + '...';
+        tdId.title = device_id;
         
-        // Nombre (editable)
+        // Nombre (editable con sincronización)
         const tdNombre = document.createElement('td');
         const inputNombre = document.createElement('input');
         inputNombre.type = 'text';
@@ -195,14 +212,34 @@ function actualizarTablaDispositivos() {
         inputNombre.placeholder = 'Nombre del alumno';
         inputNombre.dataset.deviceId = device_id;
         
+        // ⭐ Sincronización con backend
         inputNombre.addEventListener('change', (e) => {
             const nuevoNombre = e.target.value.trim();
             if (nuevoNombre) {
                 state.dispositivos[device_id].nombre = nuevoNombre;
+                
+                socket.emit('actualizar_nombre', {
+                    device_id: device_id,
+                    nombre: nuevoNombre
+                });
+                
+                console.log(`[Frontend] Nombre actualizado: ${device_id.substring(0, 8)} → ${nuevoNombre}`);
             }
         });
         
         tdNombre.appendChild(inputNombre);
+        
+        // Grupo
+        const tdGrupo = document.createElement('td');
+        tdGrupo.className = 'text-center';
+        const grupo = info.grupo || '?';
+        tdGrupo.innerHTML = `<span class="badge bg-secondary">${grupo}</span>`;
+        
+        // Rol
+        const tdRole = document.createElement('td');
+        tdRole.className = 'text-center';
+        const role = info.role || '?';
+        tdRole.innerHTML = `<span class="badge bg-info">${role}</span>`;
         
         // Estado
         const tdEstado = document.createElement('td');
@@ -231,6 +268,8 @@ function actualizarTablaDispositivos() {
         
         tr.appendChild(tdId);
         tr.appendChild(tdNombre);
+        tr.appendChild(tdGrupo);
+        tr.appendChild(tdRole);
         tr.appendChild(tdEstado);
         
         tbody.appendChild(tr);
@@ -253,30 +292,29 @@ function mostrarPanelPregunta(pregunta) {
     const panel = document.getElementById('pregunta-panel');
     panel.classList.remove('d-none');
     
-    // Actualizar info
     const infoEl = document.getElementById('pregunta-info');
     infoEl.innerHTML = `<strong>Pregunta #${pregunta.index}:</strong> ${pregunta.tipo} con ${pregunta.num_opciones} opciones`;
     
-    // Limpiar lista de respuestas
     const lista = document.getElementById('respuestas-list');
     lista.innerHTML = '';
     
-    // Crear items para cada alumno
     Object.entries(state.dispositivos).forEach(([device_id, info]) => {
         const li = document.createElement('li');
         li.className = 'list-group-item d-flex justify-content-between align-items-center';
         li.id = `respuesta-${device_id}`;
         
         const nombre = info.nombre || device_id.substring(0, 8);
+        const grupo = info.grupo || '?';
+        const role = info.role || '?';
+        
         li.innerHTML = `
-            <span>${nombre}</span>
+            <span>${nombre} <small class="text-muted">[G${grupo}:${role}]</small></span>
             <span class="badge bg-secondary">Esperando...</span>
         `;
         
         lista.appendChild(li);
     });
     
-    // Iniciar countdown
     actualizarCountdown(pregunta.timeout || 30);
 }
 
@@ -294,10 +332,7 @@ function actualizarRespuestaEnLista(device_id, nombre, respuesta) {
     const li = document.getElementById(`respuesta-${device_id}`);
     
     if (li) {
-        const nombreSpan = li.querySelector('span:first-child');
         const badgeSpan = li.querySelector('.badge');
-        
-        nombreSpan.textContent = nombre;
         badgeSpan.textContent = respuesta || '(vacía)';
         badgeSpan.className = 'badge bg-success';
     }
@@ -306,7 +341,6 @@ function actualizarRespuestaEnLista(device_id, nombre, respuesta) {
 function ocultarPanelPregunta() {
     const panel = document.getElementById('pregunta-panel');
     panel.classList.add('d-none');
-    
     state.preguntaActiva = null;
 }
 
@@ -314,7 +348,7 @@ function ocultarPanelPregunta() {
 // EVENT LISTENERS - BOTONES
 // ============================================================================
 
-// Guardar TODO (configuración + alumnos)
+// Guardar TODO
 document.getElementById('guardar-todo-btn').addEventListener('click', async () => {
     const url = document.getElementById('url-input').value.trim();
     const pin = document.getElementById('pin-input').value.trim();
@@ -344,7 +378,9 @@ document.getElementById('guardar-todo-btn').addEventListener('click', async () =
                 nombre_archivo: nombreArchivo,
                 alumnos: Object.entries(state.dispositivos).map(([id, info]) => ({
                     id: id,
-                    nombre: info.nombre || ''
+                    nombre: info.nombre || '',
+                    grupo: info.grupo || '',
+                    role: info.role || ''
                 }))
             })
         });
@@ -364,29 +400,76 @@ document.getElementById('guardar-todo-btn').addEventListener('click', async () =
     }
 });
 
-// Conectar a ClassQuiz
+// ⭐ Conectar a ClassQuiz (con desconexión previa automática)
 document.getElementById('conectar-classquiz-btn').addEventListener('click', async () => {
-    agregarLog('INFO', 'Conectando dispositivos a ClassQuiz...');
+    // Leer valores actuales
+    const url = document.getElementById('url-input').value.trim();
+    const pin = document.getElementById('pin-input').value.trim();
+    const timeout = parseInt(document.getElementById('timeout-input').value);
 
-    // Mostrar estado
+    // Validaciones
+    if (!url || !pin) {
+        alert('Por favor completa URL y PIN en la pestaña Configuración');
+        agregarLog('ERROR', 'URL o PIN faltante');
+        return;
+    }
+
+    if (isNaN(timeout) || timeout < 5 || timeout > 300) {
+        alert('Timeout debe estar entre 5 y 300 segundos');
+        agregarLog('ERROR', 'Timeout inválido');
+        return;
+    }
+
+    const numDispositivos = Object.keys(state.dispositivos).length;
+    if (numDispositivos === 0) {
+        alert('⚠️ No hay dispositivos detectados.\n\nPresiona "Descubrir Dispositivos" primero.');
+        agregarLog('ERROR', 'No hay dispositivos para conectar');
+        return;
+    }
+
+    // Confirmar reconexión
+    const confirmar = confirm(
+        `🔄 RECONEXIÓN A CLASSQUIZ\n\n` +
+        `Se desconectará la sesión anterior y se conectarán ${numDispositivos} dispositivo(s) con:\n\n` +
+        `📍 URL: ${url}\n` +
+        `🔑 PIN: ${pin}\n` +
+        `⏱️ Timeout: ${timeout}s\n\n` +
+        `¿Continuar?`
+    );
+
+    if (!confirmar) {
+        agregarLog('INFO', 'Conexión cancelada por el usuario');
+        return;
+    }
+
+    agregarLog('INFO', `🔄 Iniciando reconexión a ${url} (PIN: ${pin})...`);
+
     const statusAlert = document.getElementById('status-conexion-alert');
     const statusTexto = document.getElementById('status-conexion-texto');
     statusAlert.classList.remove('d-none');
-    statusTexto.textContent = 'Conectando...';
+    statusTexto.textContent = '🔄 Preparando reconexión...';
+    statusAlert.className = 'alert alert-info mt-3';
 
     try {
+        // ⭐ El backend automáticamente desconecta la sesión anterior
         const response = await fetch('/api/conectar_classquiz', {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                pin: pin,
+                timeout: timeout
+            })
         });
 
         const data = await response.json();
 
         if (response.ok && data.status === 'ok') {
-            agregarLog('INFO', `Conexión iniciada para ${data.count} dispositivo(s)`);
-            statusTexto.textContent = `✅ ${data.count} dispositivo(s) conectándose...`;
+            agregarLog('INFO', `✅ Reconexión iniciada para ${data.count} dispositivo(s)`);
+            agregarLog('INFO', `📍 URL: ${url} | PIN: ${pin}`);
+            statusTexto.textContent = `✅ ${data.count} dispositivo(s) conectándose con PIN ${pin}...`;
             statusAlert.className = 'alert alert-success mt-3';
 
-            // Ocultar después de 5 segundos
             setTimeout(() => {
                 statusAlert.classList.add('d-none');
             }, 5000);
@@ -395,7 +478,7 @@ document.getElementById('conectar-classquiz-btn').addEventListener('click', asyn
         }
     } catch (error) {
         console.error('Error conectando a ClassQuiz:', error);
-        agregarLog('ERROR', `Error conectando a ClassQuiz: ${error.message}`);
+        agregarLog('ERROR', `Error conectando: ${error.message}`);
         statusTexto.textContent = `❌ ${error.message}`;
         statusAlert.className = 'alert alert-danger mt-3';
     }
@@ -501,16 +584,13 @@ let pauseTimeout = null;
 document.getElementById('log-container').addEventListener('click', () => {
     const container = document.getElementById('log-container');
     
-    // Pausar auto-scroll por 5 segundos
     state.autoScroll = false;
     container.classList.add('paused');
     
-    // Limpiar timeout previo
     if (pauseTimeout) {
         clearTimeout(pauseTimeout);
     }
     
-    // Restaurar después de 5s
     pauseTimeout = setTimeout(() => {
         state.autoScroll = true;
         container.classList.remove('paused');
@@ -524,7 +604,6 @@ document.getElementById('log-container').addEventListener('click', () => {
 window.addEventListener('load', async () => {
     agregarLog('INFO', 'Interface web cargada');
     
-    // Cargar configuración inicial
     try {
         const response = await fetch('/api/config');
         const data = await response.json();

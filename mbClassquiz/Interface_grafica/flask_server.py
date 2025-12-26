@@ -819,12 +819,10 @@ def procesar_mensaje_usb(mensaje):
 
 
 def procesar_new_device(data):
-    """Procesa nuevo dispositivo detectado"""
+    """Procesa nuevo dispositivo detectado (preserva clientes existentes)"""
     device_id = data.get('device_id')
     grupo = data.get('grupo', 0)
     role = data.get('role', '?')
-    
-    print(f"[Flask] Nuevo dispositivo: {role} G{grupo} → {device_id[:8]}")
     
     with estado_lock:
         # Buscar nombre en alumnos cargados
@@ -841,7 +839,39 @@ def procesar_new_device(data):
                              "Galaxia", "Pulsar", "Quasar", "Asteroid", "Meteor"]
             nombre = f"{choice(nombres_random)}_{role}G{grupo}"
         
-        # Registrar dispositivo
+        # Si el dispositivo YA EXISTE, preservar cliente
+        if device_id in estado['dispositivos']:
+            dispositivo_existente = estado['dispositivos'][device_id]
+            cliente_existente = dispositivo_existente.get('cliente')
+            conectado_existente = dispositivo_existente.get('conectado', False)
+            
+            print(f"[Flask] Dispositivo EXISTENTE redescubierto: {nombre} [G{grupo}:{role}]")
+            
+            # Actualizar solo datos básicos
+            estado['dispositivos'][device_id].update({
+                'nombre': nombre,
+                'grupo': grupo,
+                'role': role,
+                'estado': 'registrado',
+                'pendiente': False
+            })
+            
+            # Preservar cliente Socket.IO si existe y está conectado
+            if cliente_existente and conectado_existente:
+                estado['dispositivos'][device_id]['cliente'] = cliente_existente
+                estado['dispositivos'][device_id]['conectado'] = conectado_existente
+                print(f"[Flask]   ✓ Cliente preservado (ya conectado a ClassQuiz)")
+            
+            socketio.emit('log', {
+                'nivel': 'INFO',
+                'msg': f"Redescubierto: {nombre} [G{grupo}:{role}] (cliente preservado)",
+                'timestamp': utils.timestamp()
+            })
+            return
+        
+        # Si es NUEVO, crear desde cero
+        print(f"[Flask] Nuevo dispositivo: {role} G{grupo} → {device_id[:8]}")
+        
         estado['dispositivos'][device_id] = {
             'id': device_id,
             'nombre': nombre,
@@ -858,6 +888,7 @@ def procesar_new_device(data):
         'msg': f"Detectado: {nombre} [G{grupo}:{role}]",
         'timestamp': utils.timestamp()
     })
+
 
 
 def procesar_discovery_end(data):

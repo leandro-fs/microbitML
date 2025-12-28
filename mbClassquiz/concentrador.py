@@ -4,6 +4,8 @@ from microbit import *
 import radio
 from microbitcore import RadioMessage
 
+ACTIVITY = "cqz"
+
 class Concentrador:
     def __init__(self):
         # Configuracion radio
@@ -12,7 +14,7 @@ class Concentrador:
         uart.init(baudrate=115200)
         
         # Handler de mensajes
-        self.msg_handler = RadioMessage(format="command")
+        self.msg_handler = RadioMessage(format="command", activity=ACTIVITY)
         
         # Estado
         self.dispositivos_registrados = {}  # {(grupo, rol): device_id}
@@ -29,9 +31,19 @@ class Concentrador:
         t, args = self.msg_handler.parse_payload(msg)
         if t != 'ID':
             return (None, None, None)
-        device_id = args[0] if len(args) >= 1 else None
-        grupo = self._to_int_if_num(args[1]) if len(args) >= 2 else None
-        rol = args[2] if len(args) >= 3 else None
+        
+        # Validar activity
+        if len(args) < 4:
+            return (None, None, None)
+        
+        activity_ = args[0]
+        if activity_ != ACTIVITY:
+            self.enviar_usb('{{"type":"warning","msg":"activity_mismatch:{}"}}'.format(activity_))
+            return (None, None, None)
+        
+        device_id = args[1]
+        grupo = self._to_int_if_num(args[2])
+        rol = args[3]
         return (device_id, grupo, rol)
     
     def cmd_poll_group(self, grupo, rol):
@@ -61,6 +73,13 @@ class Concentrador:
     
     def enviar_usb(self, mensaje):
         uart.write(mensaje + "\n")
+    
+    def mostrar_config(self):
+        display.show(ACTIVITY)
+        sleep(500)
+        display.show(len(self.dispositivos_registrados))
+        sleep(500)
+        display.clear()
     
     def cargar_dispositivos(self):
         try:
@@ -93,9 +112,9 @@ class Concentrador:
         # Escuchar 10 segundos
         inicio = running_time()
         while running_time() - inicio < 10000:
-            resultado = self.msg_handler.receive(radio.receive)
-            if resultado and resultado['t'] == 'ID':
-                device_id, grupo, rol = self.extract_id_with_group(resultado['d'])
+            valid, tipo, data = self.msg_handler.recibe_command(radio.receive, ['ID'])
+            if valid and tipo == 'ID':
+                device_id, grupo, rol = self.extract_id_with_group(data)
                 if device_id and grupo and rol:
                     self.procesar_id(device_id, grupo, rol)
             sleep(10)
@@ -104,7 +123,7 @@ class Concentrador:
         json_list = '{"type":"device_list","devices":['
         idx = 0
         for (g, r), did in self.dispositivos_registrados.items():
-            json_list += '{{"device_id":"{}","grupo":{},"role":"{}"}}'.format(did, g, r)
+            json_list += '{{"activity":"{}","device_id":"{}","grupo":{},"role":"{}"}}'.format(ACTIVITY, did, g, r)
             if idx < len(self.dispositivos_registrados) - 1:
                 json_list += ','
             idx += 1
@@ -134,9 +153,9 @@ class Concentrador:
         # ACK
         self.msg_handler.send(radio.send, self.msg_handler.cmd_ack(device_id))
         
-        # Notificar USB
-        self.enviar_usb('{{"type":"new_device","device_id":"{}","grupo":{},"role":"{}"}}'.format(
-            device_id, grupo, rol
+        # Notificar USB con activity
+        self.enviar_usb('{{"type":"new_device","activity":"{}","device_id":"{}","grupo":{},"role":"{}"}}'.format(
+            ACTIVITY, device_id, grupo, rol
         ))
         
         display.scroll(len(self.dispositivos_registrados), delay=60)
@@ -172,9 +191,9 @@ class Concentrador:
                 
                 # Esperar respuesta 200ms
                 for _ in range(4):
-                    resultado = self.msg_handler.receive(radio.receive)
-                    if resultado and resultado['t'] == 'ANSWER':
-                        _, grp, rl, opciones = self.extract_answer_with_group(resultado['d'])
+                    valid, tipo, data = self.msg_handler.recibe_command(radio.receive, ['ANSWER'])
+                    if valid and tipo == 'ANSWER':
+                        _, grp, rl, opciones = self.extract_answer_with_group(data)
                         if grp == grupo and rl == rol:
                             respuesta = opciones[0] if opciones else ""
                             break
@@ -208,9 +227,9 @@ class Concentrador:
             recibio = False
             
             while running_time() - inicio < 1000:
-                resultado = self.msg_handler.receive(radio.receive)
-                if resultado and resultado['t'] == 'PONG':
-                    dev = self.msg_handler.extract_device_id(resultado['d'])
+                valid, tipo, data = self.msg_handler.recibe_command(radio.receive, ['PONG'])
+                if valid and tipo == 'PONG':
+                    dev = self.msg_handler.extract_device_id(data)
                     if dev == device_id:
                         recibio = True
                         break
@@ -268,6 +287,10 @@ class Concentrador:
             if button_b.was_pressed():
                 self.verificar_estado()
     
+    def manejar_logo(self):
+        if pin_logo.is_touched():
+            self.mostrar_config()
+    
     def run(self):
         self.enviar_usb('{"type":"debug","msg":"CONCENTRADOR_INICIADO"}')
         display.show(Image.HAPPY)
@@ -278,6 +301,7 @@ class Concentrador:
         
         while True:
             self.manejar_botones()
+            self.manejar_logo()
             self.leer_usb()
             sleep(50)
 

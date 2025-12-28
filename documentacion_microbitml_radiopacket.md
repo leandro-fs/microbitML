@@ -17,14 +17,14 @@ __all__ = ["test_module_import", "RadioPacket"]
 
 ### Formato de Paquete
 ```
-version_token,message_bus,sender_role,payload
+activity,message_bus,sender_role,payload
 ```
 
 **Ejemplo:**
 ```
 pct,3,A,6
 ```
-- `pct`: Token de versión
+- `pct`: Actividad
 - `3`: Bus de mensajes
 - `A`: Rol emisor
 - `6`: Datos (contador)
@@ -77,7 +77,7 @@ self.fixed_role = None  # Rol fijo opcional
 
 **Lógica:**
 ```python
-1. Importa: version_token, message_bus, current_role desde main
+1. Importa: activity, message_bus, current_role desde main
 2. Determina rol emisor:
    - Si fixed_role existe → usa fixed_role
    - Si no → usa current_role global
@@ -120,7 +120,7 @@ packet.encode("hello,world")
 
 #### 1. Validación de Versión
 ```python
-parts[0] == version_token
+parts[0] == activity
 ```
 - Si falla: error no fatal (código 9)
 - Permite compatibilidad entre versiones
@@ -153,7 +153,7 @@ parts[3].replace("_coma_", ",")
 │
 ├─ Dividir mensaje por comas → parts[]
 │
-├─ Validar parts[0] == version_token
+├─ Validar parts[0] == activity
 │  └─ Falla: error_handler(9) + lanzar excepción
 │
 ├─ Validar parts[1] == message_bus
@@ -180,7 +180,7 @@ valid, desc, role, data = packet.decode("pct,0,A,5", ("A","B"))
 
 # Versión incorrecta
 valid, desc, role, data = packet.decode("v2,0,A,5", ("A","B"))
-# Resultado: (False, "parts[version_token]=v2, expected:pct", "", "")
+# Resultado: (False, "parts[activity]=v2, expected:pct", "", "")
 
 # Bus incorrecto
 valid, desc, role, data = packet.decode("pct,3,A,5", ("A","B"))
@@ -204,11 +204,11 @@ El módulo usa imports dentro de funciones para evitar dependencias circulares:
 
 ```python
 def encode(self, payload):
-    from main import version_token, message_bus, current_role
+    from main import activity, message_bus, current_role
     ...
 
 def decode(self, received_message, valid_origin_roles):
-    from main import version_token, message_bus, current_role, error_handler
+    from main import activity, message_bus, current_role, error_handler
     ...
 ```
 
@@ -218,7 +218,7 @@ def decode(self, received_message, valid_origin_roles):
 - Imports locales rompen el ciclo
 
 **Variables importadas de main.py:**
-- `version_token` (str): Token de versión del protocolo
+- `activity` (str): Actividad del protocolo
 - `message_bus` (int): Bus de mensajes actual
 - `current_role` (str): Rol global del nodo
 - `error_handler` (func): Manejador de errores
@@ -233,7 +233,7 @@ error_handler(halt=False, error_code=9, description=...)
 ```
 - **Severidad:** WARN
 - **Acción:** Log en consola + continúa ejecución
-- **Causa:** Paquete con version_token diferente
+- **Causa:** Paquete con activity diferente
 
 ### Error Código 1: Clonación de roles
 ```python
@@ -293,7 +293,7 @@ if parts[2] == current_role:  # Emisor == receptor
 
 | Campo | Índice | Validación | Falla | Acción |
 |-------|--------|------------|-------|--------|
-| Version | parts[0] | == version_token | WARN | error_handler(9) |
+| Version | parts[0] | == activity | WARN | error_handler(9) |
 | Bus | parts[1] | == message_bus | Silencioso | Descarta mensaje |
 | Rol | parts[2] | in valid_origins | Normal | Descarta mensaje |
 | Rol | parts[2] | != current_role | Fatal | HALT(1) clonación |
@@ -396,7 +396,7 @@ RECEPTOR (Rol Z)
 - **Fixed role**: Rol asignado a instancia de RadioPacket (sobrescribe global)
 - **Payload**: Datos útiles del mensaje (campo 4 del protocolo)
 - **Valid origin roles**: Lista blanca de roles autorizados como emisores
-- **Version token**: Identificador de versión del protocolo ("pct")
+- **Activity**: Identificador de versión del protocolo ("pct")
 
 ---
 

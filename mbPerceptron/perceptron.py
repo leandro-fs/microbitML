@@ -1,9 +1,11 @@
+# perceptron.py
 from microbit import *
 import radio
 import music
 import machine
 from microbitcore import RadioMessage, ConfigManager
 
+ACTIVITY = "pct"
 SUMA_MAX = 22
 
 class PerceptronApp:
@@ -19,7 +21,7 @@ class PerceptronApp:
         if self.config.get('valor') is None:
             self.config.set('valor', 0)
 
-        self.msg = RadioMessage(format="csv", device_id=self.device_id)
+        self.msg = RadioMessage(format="csv", activity=ACTIVITY, device_id=self.device_id)
         self.msg.set_context(group=self.config.get('grupo'), role=self.config.get('role'))
 
         self.suma_total = 0
@@ -61,7 +63,9 @@ class PerceptronApp:
         self.config.save()
         vp = v * peso
         self.mostrar_leds(vp)
-        self.msg.send(radio.send, str(vp))
+        payload = str(vp)
+        self.msg.send(radio.send, payload)
+        print("TX:{}:v={},peso={},vp={}".format(self.config.get('role'), v, peso, vp))
 
     def rol_a(self):
         if button_a.was_pressed():
@@ -76,10 +80,9 @@ class PerceptronApp:
             self.actualizar_valor(1, 2)
 
     def rol_z(self):
-        m = self.msg.receive(radio.receive, valid_roles=['A','B'])
-        if m and m['t'] == 'csv_valid':
-            sender = m.get('m')
-            payload = m.get('d')
+        valid, sender, payload = self.msg.recibe_csv(radio.receive, valid_roles=['A','B'])
+        if valid:
+            print("RX:Z:sender={},payload={}".format(sender, payload))
             if sender and payload:
                 try:
                     val = int(payload)
@@ -94,12 +97,14 @@ class PerceptronApp:
                     if self.suma_total > SUMA_MAX:
                         self.suma_total = SUMA_MAX
 
+                    print("SUMA:A={},B={},total={}".format(self.valor_a, self.valor_b, self.suma_total))
+
                     if self.suma_total == SUMA_MAX and suma_anterior != SUMA_MAX:
                         music.pitch(frequency=500, duration=250, wait=False)
 
                     self.mostrar_leds(self.suma_total)
-                except:
-                    pass
+                except Exception as e:
+                    print("ERR:Z:{}".format(e))
 
     def cambiar_config(self):
         if pin1.is_touched():
@@ -125,6 +130,8 @@ class PerceptronApp:
                 button_b.was_pressed()
 
     def mostrar_config(self):
+        display.show(ACTIVITY)
+        sleep(500)
         r = self.config.get('role')
         g = self.config.get('grupo')
         if r is not None:

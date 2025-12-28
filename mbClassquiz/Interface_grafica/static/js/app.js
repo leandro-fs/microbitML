@@ -189,7 +189,7 @@ function actualizarTablaDispositivos() {
     
     if (dispositivos.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="text-center text-muted">No hay dispositivos registrados</td>';
+        tr.innerHTML = '<td colspan="6" class="text-center text-muted">No hay dispositivos registrados</td>';
         tbody.appendChild(tr);
         return;
     }
@@ -266,11 +266,18 @@ function actualizarTablaDispositivos() {
         
         tdEstado.innerHTML = `<span class="${estadoClase}">${estadoTexto}</span>`;
         
+        // Actividad (NUEVO)
+        const tdActividad = document.createElement('td');
+        tdActividad.className = 'text-center';
+        const actividad = info.actividad || 'Unknown';
+        tdActividad.innerHTML = `<span class="badge bg-success">${actividad}</span>`;
+        
         tr.appendChild(tdId);
         tr.appendChild(tdNombre);
         tr.appendChild(tdGrupo);
         tr.appendChild(tdRole);
         tr.appendChild(tdEstado);
+        tr.appendChild(tdActividad);
         
         tbody.appendChild(tr);
     });

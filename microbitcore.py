@@ -1,10 +1,11 @@
 # microbitcore.py
 # Libreria de comunicacion radio para micro:bit
-# Formatos: CSV (group,role,payload) y Command (CMD:args)
+# Formatos: CSV (activity,group,role,payload) y Command (CMD:args)
 
 class RadioMessage:
-    def __init__(self, format="csv", device_id=None):
+    def __init__(self, format="csv", activity=None, device_id=None):
         self.format = format
+        self.activity = activity
         self.device_id = device_id
         self.group = None
         self.role = None
@@ -17,7 +18,11 @@ class RadioMessage:
         if self.format == "csv":
             if self.group is None or self.role is None:
                 return None
-            return "{},{},{}".format(self.group, self.role, str(payload))
+            payload_escaped = str(payload).replace(",", "_coma_")
+            if self.activity:
+                return "{},{},{},{}".format(self.activity, self.group, self.role, payload_escaped)
+            else:
+                return "{},{},{}".format(self.group, self.role, payload_escaped)
         else:
             return str(payload)
     
@@ -28,14 +33,23 @@ class RadioMessage:
         msg_str = raw_msg.decode('utf-8') if isinstance(raw_msg, bytes) else str(raw_msg)
         
         if self.format == "csv":
-            partes = msg_str.split(',', 2)
-            if len(partes) == 3:
+            partes = msg_str.split(',')
+            
+            # Detectar si tiene activity
+            if self.activity and len(partes) == 4:
+                activity_, grupo, rol, data = partes
+                if activity_ != self.activity:
+                    return {'t': 'activity_mismatch', 'm': None, 'g': None, 'd': None}
+            elif len(partes) == 3:
                 grupo, rol, data = partes
-                if valid_roles and rol not in valid_roles:
-                    return {'t': 'filtered', 'm': rol, 'g': grupo, 'd': data}
-                return {'t': 'csv_valid', 'm': rol, 'g': grupo, 'd': data}
             else:
                 return {'t': 'csv_invalid', 'm': None, 'g': None, 'd': msg_str}
+            
+            data_unescaped = data.replace("_coma_", ",")
+            
+            if valid_roles and rol not in valid_roles:
+                return {'t': 'filtered', 'm': rol, 'g': grupo, 'd': data_unescaped}
+            return {'t': 'csv_valid', 'm': rol, 'g': grupo, 'd': data_unescaped}
         else:
             return {'t': msg_str.split(':')[0] if ':' in msg_str else msg_str, 
                     'm': None, 'g': None, 'd': msg_str}
@@ -50,6 +64,26 @@ class RadioMessage:
         if raw:
             return self.decode(raw, valid_roles)
         return None
+    
+    def recibe_csv(self, radio_receive_fn, valid_roles=None):
+        """Helper para recepcion simple de mensajes CSV
+        Retorna: (valid, sender_role, payload)
+        """
+        m = self.receive(radio_receive_fn, valid_roles)
+        if m and m['t'] == 'csv_valid':
+            return (True, m.get('m'), m.get('d'))
+        return (False, None, None)
+    
+    def recibe_command(self, radio_receive_fn, expected_types=None):
+        """Helper para recepcion de comandos
+        Retorna: (valid, tipo_comando, payload)
+        """
+        m = self.receive(radio_receive_fn)
+        if m and expected_types and m['t'] in expected_types:
+            return (True, m['t'], m['d'])
+        elif m and not expected_types:
+            return (True, m['t'], m['d'])
+        return (False, None, None)
     
     def parse_payload(self, payload):
         if not payload:
@@ -97,12 +131,6 @@ class RadioMessage:
     
     def cmd_pong(self):
         return "PONG:{}".format(self.device_id) if self.device_id else "PONG"
-    
-    def cmd_poll(self, target_id):
-        return "POLL:{}".format(target_id)
-    
-    def cmd_vote(self, opcion):
-        return "VOTE:{}:{}".format(self.device_id, opcion) if self.device_id else "VOTE:{}".format(opcion)
     
     def cmd_answer(self, *opciones):
         opciones_str = ','.join(str(o) for o in opciones)
@@ -170,9 +198,6 @@ class ConfigManager:
         if key in self.config:
             self.config[key] = value
     
-    def get_all(self):
-        return self.config.copy()
-    
     def cycle_role(self):
         idx = self.roles.index(self.config['role']) if self.config['role'] in self.roles else 0
         idx = (idx + 1) % len(self.roles)
@@ -182,18 +207,3 @@ class ConfigManager:
     def cycle_grupo(self):
         self.config['grupo'] = (self.config['grupo'] + 1) % (self.grupos_max + 1)
         return self.config['grupo']
-    
-    def reset(self):
-        self.config['role'] = self.roles[0]
-        self.config['grupo'] = 0
-        for key in self.config:
-            if key not in ['role', 'grupo']:
-                self.config[key] = None
-    
-    def display_config(self, display, delay_ms=500):
-        from microbit import sleep
-        display.show(str(self.config['role']))
-        sleep(delay_ms)
-        display.show(str(self.config['grupo']))
-        sleep(delay_ms)
-        display.clear()

@@ -6,6 +6,8 @@ import machine
 from microbitcore import RadioMessage, ConfigManager
 from random import randint
 
+ACTIVITY = "cqz"
+
 class ClassQuiz:
     def __init__(self):
         # Identificacion
@@ -16,7 +18,7 @@ class ClassQuiz:
         radio.on()
         
         # Protocolo
-        self.msg_handler = RadioMessage(format="command", device_id=self.device_id)
+        self.msg_handler = RadioMessage(format="command", activity=ACTIVITY, device_id=self.device_id)
         
         # Configuracion grupo:rol
         self.config = ConfigManager(
@@ -55,7 +57,7 @@ class ClassQuiz:
         return int((slot * max_delay) / max_slot) if max_slot > 0 else 0
     
     def cmd_id_with_group(self, grupo, role):
-        return self.msg_handler.command("ID", self.device_id, grupo, role)
+        return self.msg_handler.command("ID", ACTIVITY, self.device_id, grupo, role)
     
     def cmd_answer_with_group(self, grupo, role, respuesta):
         return self.msg_handler.command("ANSWER", self.device_id, grupo, role, respuesta)
@@ -76,6 +78,8 @@ class ClassQuiz:
         return g
     
     def mostrar_config(self):
+        display.show(ACTIVITY)
+        sleep(500)
         display.show(str(self.config.get('role')))
         sleep(500)
         display.show(str(self.config.get('grupo')))
@@ -246,11 +250,8 @@ class ClassQuiz:
             self.mostrar_config()
     
     def manejar_mensajes_radio(self):
-        resultado = self.msg_handler.receive(radio.receive)
-        if resultado:
-            tipo = resultado['t']
-            data = resultado['d']
-            
+        valid, tipo, data = self.msg_handler.recibe_command(radio.receive)
+        if valid:
             if tipo == 'REPORT':
                 self.procesar_report()
             elif tipo == 'ACK':

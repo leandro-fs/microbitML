@@ -32,7 +32,7 @@ Rol B (peso=2, max=6) ──┘
 ```python
 CONFIG_FILE = 'config.cfg'       # Archivo persistencia
 message_bus_max = 9              # Bus máximo (0-9)
-version_token = "pct"            # Token de versión
+activity = "pct"            # Actividad
 ```
 
 ### Pesos y Límites
@@ -275,7 +275,7 @@ Botón B: contador -= increment (respeta min 0)
 
 ### Secuencia de Inicio
 ```python
-1. display.scroll(version_token)  # Muestra "pct"
+1. display.scroll(activity)  # Muestra "pct"
 2. load_config()                  # Carga rol y bus
 3. packet_input/output = RadioPacket()
 4. radio.on() + config(group=153)

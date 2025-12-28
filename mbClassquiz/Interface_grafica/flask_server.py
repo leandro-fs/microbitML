@@ -819,6 +819,7 @@ def procesar_new_device(data):
     device_id = data.get('device_id')
     grupo = data.get('grupo', 0)
     role = data.get('role', '?')
+    actividad = data.get('activity', 'Unknown')  # Campo "activity" desde micro:bit
     
     with estado_lock:
         # Buscar nombre en alumnos cargados
@@ -841,13 +842,14 @@ def procesar_new_device(data):
             cliente_existente = dispositivo_existente.get('cliente')
             conectado_existente = dispositivo_existente.get('conectado', False)
             
-            print(f"[Flask] Dispositivo EXISTENTE redescubierto: {nombre} [G{grupo}:{role}]")
+            print(f"[Flask] Dispositivo EXISTENTE redescubierto: {nombre} [G{grupo}:{role}] - {actividad}")
             
-            # Actualizar solo datos básicos
+            # Actualizar solo datos básicos (incluye actividad)
             estado['dispositivos'][device_id].update({
                 'nombre': nombre,
                 'grupo': grupo,
                 'role': role,
+                'actividad': actividad,
                 'estado': 'registrado',
                 'pendiente': False
             })
@@ -860,19 +862,20 @@ def procesar_new_device(data):
             
             socketio.emit('log', {
                 'nivel': 'INFO',
-                'msg': f"Redescubierto: {nombre} [G{grupo}:{role}] (cliente preservado)",
+                'msg': f"Redescubierto: {nombre} [G{grupo}:{role}] - {actividad} (cliente preservado)",
                 'timestamp': utils.timestamp()
             })
             return
         
         # Si es NUEVO, crear desde cero
-        print(f"[Flask] Nuevo dispositivo: {role} G{grupo} → {device_id[:8]}")
+        print(f"[Flask] Nuevo dispositivo: {role} G{grupo} → {device_id[:8]} - {actividad}")
         
         estado['dispositivos'][device_id] = {
             'id': device_id,
             'nombre': nombre,
             'grupo': grupo,
             'role': role,
+            'actividad': actividad,
             'estado': 'registrado',
             'pendiente': True,
             'cliente': None,
@@ -881,7 +884,7 @@ def procesar_new_device(data):
     
     socketio.emit('log', {
         'nivel': 'INFO',
-        'msg': f"Detectado: {nombre} [G{grupo}:{role}]",
+        'msg': f"Detectado: {nombre} [G{grupo}:{role}] - {actividad}",
         'timestamp': utils.timestamp()
     })
 

@@ -436,8 +436,8 @@ document.getElementById('conectar-classquiz-btn').addEventListener('click', asyn
         return;
     }
 
-    if (isNaN(timeout) || timeout < 5 || timeout > 300) {
-        alert('Timeout debe estar entre 5 y 300 segundos');
+    if (isNaN(timeout) || timeout < 0) {
+        alert('Timeout debe ser >= 0 (0 = automático basado en ClassQuiz)');
         agregarLog('ERROR', 'Timeout inválido');
         return;
     }

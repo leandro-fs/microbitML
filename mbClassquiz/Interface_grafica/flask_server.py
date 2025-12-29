@@ -82,8 +82,8 @@ def guardar_todo():
                 return jsonify({'error': 'PIN inválido'}), 400
 
             timeout = int(data.get('timeout', estado['timeout_votacion']))
-            if timeout < 5 or timeout > 300:
-                return jsonify({'error': 'Timeout debe estar entre 5 y 300 segundos'}), 400
+            if timeout < 0:
+                return jsonify({'error': 'Timeout debe ser >= 0 (0 = automático)'}), 400
 
             # Actualizar estado
             estado['url_classquiz'] = url
@@ -180,8 +180,8 @@ def set_config():
                 return jsonify({'error': 'PIN inválido'}), 400
             
             timeout = int(data.get('timeout', estado['timeout_votacion']))
-            if timeout < 5 or timeout > 300:
-                return jsonify({'error': 'Timeout debe estar entre 5 y 300 segundos'}), 400
+            if timeout < 0:
+                return jsonify({'error': 'Timeout debe ser >= 0 (0 = automático)'}), 400
             
             # Actualizar estado
             estado['url_classquiz'] = url

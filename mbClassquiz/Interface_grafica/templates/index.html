@@ -71,8 +71,8 @@
                         <div class="mb-3">
                             <label for="timeout-input" class="form-label">Tiempo de votación (segundos):</label>
                             <input type="number" class="form-control" id="timeout-input" 
-                                   value="30" min="5" max="300">
-                            <div class="form-text">Tiempo que los estudiantes tienen para responder</div>
+                                   value="0" min="0" max="600">
+                            <div class="form-text">0 = Automático (usa tiempo de ClassQuiz - 2s lag) | Manual: 1-600s</div>
                         </div>
                         
                         <hr class="my-4">
@@ -91,11 +91,14 @@
                         </div>
 
                         <div class="d-flex gap-2 mb-4">
-                            <button class="btn btn-primary" id="guardar-todo-btn">
-                                💾 Guardar Archivo
-                            </button>
                             <button class="btn btn-secondary" id="cargar-config-btn">
                                 📂 Cargar Archivo
+                            </button>
+                            <button class="btn btn-info btn-sm" id="descubrir-btn">
+                                🔍 Descubrir Dispositivos
+                            </button>
+                            <button class="btn btn-primary" id="guardar-todo-btn">
+                                💾 Guardar Archivo
                             </button>
                         </div>
 

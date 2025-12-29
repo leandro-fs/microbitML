@@ -113,7 +113,7 @@ def configurar_cliente_socketio(cliente, nombre, device_id, pin, estado):
 
 def procesar_nueva_pregunta(data, estado):
     """
-    Procesa pregunta de ClassQuiz (con timeout automático como proxy.py)
+    Procesa pregunta de ClassQuiz (con timeout inteligente)
     """
     global pregunta_actual, tipo_pregunta_actual, num_opciones_actual, opciones_actuales
     
@@ -142,10 +142,26 @@ def procesar_nueva_pregunta(data, estado):
         'num_options': num_opciones_actual
     })
     
-    # Obtener timeout configurado
-    timeout = estado.get('timeout_votacion', 30)
+    # Calcular timeout inteligente
+    tiempo_classquiz = int(question.get('time', 30))
+    tiempo_classquiz_menos_lag = max(3, tiempo_classquiz - 2)
+    timeout_configurado = estado.get('timeout_votacion', 0)
     
-    # Iniciar countdown automático en thread separado (como proxy.py)
+    # Aplicar lógica de selección
+    if timeout_configurado == 0:
+        # Modo automático
+        timeout = tiempo_classquiz_menos_lag
+        print(f"[Timeout] Automático: {timeout}s (ClassQuiz: {tiempo_classquiz}s - 2s lag)")
+    elif timeout_configurado > tiempo_classquiz_menos_lag:
+        # Configurado excede límite
+        timeout = tiempo_classquiz_menos_lag
+        print(f"[Timeout] Límite: {timeout}s (configurado {timeout_configurado}s > máx {tiempo_classquiz_menos_lag}s)")
+    else:
+        # Valor manual válido (1 <= timeout <= tiempo_classquiz_menos_lag)
+        timeout = timeout_configurado
+        print(f"[Timeout] Manual: {timeout}s (máx permitido: {tiempo_classquiz_menos_lag}s)")
+    
+    # Iniciar countdown automático en thread separado
     def countdown_votacion():
         print(f"[Votacion] Esperando {timeout}s...")
         for i in range(timeout, 0, -1):

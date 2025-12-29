@@ -27,8 +27,8 @@ USB_READ_INTERVAL = 0.05  # segundos entre lecturas
 # ============================================================================
 
 DEFAULT_URL_CLASSQUIZ = 'http://localhost:8000'
-DEFAULT_GAME_PIN = '149206'
-DEFAULT_TIMEOUT = 30  # segundos para votación
+DEFAULT_GAME_PIN = '000000'
+DEFAULT_TIMEOUT = 0  # segundos para votación
 
 # ============================================================================
 # ARCHIVOS

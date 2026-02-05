@@ -46,7 +46,7 @@ class PerceptronApp:
         self.config.save()
         vp = v * peso
         self.mostrar_leds(vp)
-        self.msg.send(radio.send, str(vp))
+        self.msg.send(str(vp))
         print("TX:{}:v={},peso={},vp={}".format(self.config.get('role'), v, peso, vp))
 
     def rol_a(self):
@@ -62,31 +62,30 @@ class PerceptronApp:
             self.actualizar_valor(1, 2)
 
     def rol_z(self):
-        valid, sender, payload = self.msg.recibe_csv(radio.receive, valid_roles=['A','B'])
+        valid, sender, payload = self.msg.recibe_csv(valid_roles=['A','B'])
         if valid:
             print("RX:Z:sender={},payload={}".format(sender, payload))
-            if sender and payload:
-                try:
-                    val = int(payload)
-                    suma_anterior = self.suma_total
+            try:
+                val = int(payload)
+                suma_anterior = self.suma_total
 
-                    if sender == 'A':
-                        self.valor_a = val
-                    elif sender == 'B':
-                        self.valor_b = val
+                if sender == 'A':
+                    self.valor_a = val
+                elif sender == 'B':
+                    self.valor_b = val
 
-                    self.suma_total = self.valor_a + self.valor_b
-                    if self.suma_total > SUMA_MAX:
-                        self.suma_total = SUMA_MAX
+                self.suma_total = self.valor_a + self.valor_b
+                if self.suma_total > SUMA_MAX:
+                    self.suma_total = SUMA_MAX
 
-                    print("SUMA:A={},B={},total={}".format(self.valor_a, self.valor_b, self.suma_total))
+                print("SUMA:A={},B={},total={}".format(self.valor_a, self.valor_b, self.suma_total))
 
-                    if self.suma_total == SUMA_MAX and suma_anterior != SUMA_MAX:
-                        music.pitch(frequency=500, duration=250, wait=False)
+                if self.suma_total == SUMA_MAX and suma_anterior != SUMA_MAX:
+                    music.pitch(frequency=500, duration=250, wait=False)
 
-                    self.mostrar_leds(self.suma_total)
-                except Exception as e:
-                    print("ERR:Z:{}".format(e))
+                self.mostrar_leds(self.suma_total)
+            except Exception as e:
+                print("ERR:Z:{}".format(e))
 
     def cambiar_config(self):
         if self.config.config_rg(pin1, button_a, button_b, self.mostrar_config):
@@ -103,7 +102,7 @@ class PerceptronApp:
             display.show(str(g))
             sleep(500)
         display.clear()
-
+    #----------------------------------#
     def step(self):
         self.cambiar_config()
         if pin_logo.is_touched():

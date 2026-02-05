@@ -70,31 +70,33 @@ class RadioMessage:
             return {'t': msg_str.split(':')[0] if ':' in msg_str else msg_str, 
                     'm': None, 'g': None, 'd': msg_str}
     
-    def send(self, radio_send_fn, payload):
+    def send(self, payload):
+        """Envia payload por radio"""
         encoded = self.encode(payload)
         if encoded:
-            radio_send_fn(encoded)
+            radio.send(encoded)
     
-    def receive(self, radio_receive_fn, valid_roles=None):
-        raw = radio_receive_fn()
+    def receive(self, valid_roles=None):
+        """Recibe mensaje raw de radio"""
+        raw = radio.receive()
         if raw:
             return self.decode(raw, valid_roles)
         return None
     
-    def recibe_csv(self, radio_receive_fn, valid_roles=None):
+    def recibe_csv(self, valid_roles=None):
         """Helper para recepcion simple de mensajes CSV
         Retorna: (valid, sender_role, payload)
         """
-        m = self.receive(radio_receive_fn, valid_roles)
+        m = self.receive(valid_roles)
         if m and m['t'] == 'csv_valid':
             return (True, m.get('m'), m.get('d'))
         return (False, None, None)
     
-    def recibe_command(self, radio_receive_fn, expected_types=None):
+    def recibe_command(self, expected_types=None):
         """Helper para recepcion de comandos
         Retorna: (valid, tipo_comando, payload)
         """
-        m = self.receive(radio_receive_fn)
+        m = self.receive()
         if m and expected_types and m['t'] in expected_types:
             return (True, m['t'], m['d'])
         elif m and not expected_types:

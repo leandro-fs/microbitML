@@ -5,6 +5,7 @@
 # microbitml.py
 # Libreria de comunicacion radio para micro:bit
 # Formatos: CSV (activity,group,role,payload) y Command (CMD:args)
+
 from microbit import display, sleep
 
 class RadioMessage:
@@ -40,7 +41,6 @@ class RadioMessage:
         if self.format == "csv":
             partes = msg_str.split(',')
             
-            # Detectar si tiene activity
             if self.activity and len(partes) == 4:
                 activity_, grupo, rol, data = partes
                 if activity_ != self.activity:
@@ -155,7 +155,7 @@ class ConfigManager:
         self.config_file = config_file
         self.roles = roles or ['A', 'B', 'Z']
         self.grupos_max = grupos_max
-        self.grupos_min = grupos_min  # NUEVO
+        self.grupos_min = grupos_min
         self.config = {
             'role': self.roles[0],
             'grupo': self.grupos_min
@@ -216,3 +216,36 @@ class ConfigManager:
         g = ((g - self.grupos_min + 1) % rango) + self.grupos_min
         self.config['grupo'] = g
         return g
+    
+    def cfg_loop(self, p1, ba, bb, cb=None):
+        """Modo config: pin1+A/B cicla role/grupo. Retorna True si hubo cambios."""
+        if not p1.is_touched():
+            return False
+        
+        sleep(200)
+        changed = False
+        
+        while p1.is_touched():
+            if ba.was_pressed():
+                self.cycle_role()
+                self.save()
+                changed = True
+                if cb:
+                    cb()
+                while ba.is_pressed():
+                    sleep(50)
+            
+            if bb.was_pressed():
+                self.cycle_grupo()
+                self.save()
+                changed = True
+                if cb:
+                    cb()
+                while bb.is_pressed():
+                    sleep(50)
+            
+            sleep(50)
+        
+        display.clear()
+        sleep(200)
+        return changed

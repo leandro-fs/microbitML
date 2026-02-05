@@ -25,7 +25,7 @@ class ClassQuiz:
             config_file='config.cfg',
             roles=['A', 'B', 'C', 'D', 'E', 'Z'],
             grupos_max=9,
-            grupos_min=1  # ← NUEVO parámetro
+            grupos_min=1
         )
         self.config.load()
         
@@ -165,7 +165,7 @@ class ClassQuiz:
         # Toggle
         self.seleccionadas[idx] = not self.seleccionadas[idx]
         
-        # Si es "unica" y acabamos de seleccionar, deseleccionar resto
+        # Si acabamos de seleccionar, deseleccionar resto
         if self.tipo_pregunta == "unica" and self.seleccionadas[idx]:
             for i in range(len(self.seleccionadas)):
                 if i != idx:
@@ -185,8 +185,6 @@ class ClassQuiz:
     def mostrar_estado_votacion(self):
         """Muestra letra actual, con indicator si esta seleccionada"""
         letra = ['A', 'B', 'C', 'D'][self.opcion_actual_idx]
-        
-        # Mostrar letra base
         display.show(letra)
         
         # Si esta seleccionada, parpadear pixel central
@@ -194,39 +192,9 @@ class ClassQuiz:
             sleep(150)
             display.set_pixel(2, 2, 9)
     
-    def manejar_modo_config(self):
-        if pin1.is_touched():
-            self.modo_config = True
-            self.log('CFG:PIN1_inicio')
-            sleep(200)
-            
-            while pin1.is_touched():
-                if button_a.was_pressed():
-                    self.log('BTN:A (cfg)')
-                    self.config.cycle_role()
-                    self.config.save()
-                    display.clear()
-                    sleep(100)
-                    self.mostrar_config()
-                    while button_a.is_pressed():
-                        sleep(50)
-                
-                if button_b.was_pressed():
-                    self.log('BTN:B (cfg)')
-                    self.config.cycle_grupo()
-                    self.config.save()
-                    display.clear()
-                    sleep(100)
-                    self.mostrar_config()
-                    while button_b.is_pressed():
-                        sleep(50)
-                
-                sleep(50)
-            
-            display.clear()
-            self.log('CFG:PIN1_fin')
-            self.modo_config = False
-            sleep(200)
+    def cambiar_config(self):
+        if self.config.cfg_loop(pin1, button_a, button_b, self.mostrar_config):
+            self.log('CFG:Cambios_aplicados')
     
     def manejar_logo(self):
         if pin_logo.is_touched():
@@ -282,7 +250,7 @@ class ClassQuiz:
         display.clear()
         
         while True:
-            self.manejar_modo_config()
+            self.cambiar_config()
             self.manejar_logo()
             self.manejar_mensajes_radio()
             self.manejar_votacion()

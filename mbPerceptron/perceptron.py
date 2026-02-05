@@ -11,7 +11,7 @@ SUMA_MAX = 22
 class PerceptronApp:
     def __init__(self):
         self.device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
-        self.config = ConfigManager(roles=['Z','A','B'], grupos_max=9, extra_fields={'valor':0})
+        self.config = ConfigManager(roles=['Z','A','B'], grupos_max=9, grupos_min=0, extra_fields={'valor':0})
         self.config.load()
 
         if self.config.get('role') is None:
@@ -36,7 +36,7 @@ class PerceptronApp:
         if r:
             display.show(str(r))
             sleep(500)
-        if g:
+        if g is not None:
             display.show(str(g))
             sleep(500)
         display.clear()
@@ -107,31 +107,14 @@ class PerceptronApp:
                     print("ERR:Z:{}".format(e))
 
     def cambiar_config(self):
-        if pin1.is_touched():
-            if button_a.was_pressed():
-                self.config.cycle_role()
-                self.config.save()
-                nr = self.config.get('role')
-                self.msg.set_context(group=self.config.get('grupo'), role=nr)
-                display.show(str(nr))
-                sleep(1000)
-                display.clear()
-                button_a.was_pressed()
-            elif button_b.was_pressed():
-                self.config.cycle_grupo()
-                self.config.save()
-                ng = self.config.get('grupo')
-                self.msg.set_context(group=ng, role=self.config.get('role'))
-                if ng is not None:
-                    radio.config(channel=ng, power=6, length=64, queue=10)
-                display.show(str(ng))
-                sleep(1000)
-                display.clear()
-                button_b.was_pressed()
+        if self.config.cfg_loop(pin1, button_a, button_b, self.mostrar_config):
+            self.msg.set_context(group=self.config.get('grupo'), 
+                                role=self.config.get('role'))
+            ng = self.config.get('grupo')
+            if ng is not None:
+                radio.config(channel=ng, power=6, length=64, queue=10)
 
     def mostrar_config(self):
-        display.show(ACTIVITY)
-        sleep(500)
         r = self.config.get('role')
         g = self.config.get('grupo')
         if r is not None:
@@ -145,6 +128,8 @@ class PerceptronApp:
     def step(self):
         self.cambiar_config()
         if pin_logo.is_touched():
+            display.show(ACTIVITY)
+            sleep(500)
             self.mostrar_config()
         if not pin1.is_touched():
             ra = self.config.get('role')

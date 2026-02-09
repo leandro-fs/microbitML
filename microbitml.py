@@ -172,13 +172,12 @@ class ConfigManager:
     def load(self):
         try:
             with open(self.config_file, 'r') as f:
-                content = f.read()       
-            if not content.strip():
+                content = f.read().strip()            
+            if not content:
                 return False
-            
-            for s in content.splitlines():
-                if '=' in s:
-                    k, v = s.split('=', 1)
+            for linea in content.split('\n'):
+                if '=' in linea:
+                    k, v = linea.split('=', 1)
                     k = k.strip()
                     v = v.strip()               
                     if k in self.config:

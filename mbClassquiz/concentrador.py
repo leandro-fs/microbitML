@@ -6,49 +6,12 @@ ACTIVITY = "cqz"
 
 class Concentrador:
     def __init__(self):
-        self.msg = RadioMessage(format="command", activity=ACTIVITY, channel=7)
-        
+        self.msg = RadioMessage(activity=ACTIVITY, channel=7)
         uart.init(baudrate=115200)
         
         self.dispositivos_registrados = {}
         self.polling_activo = False
         self.CONFIG_FILE = 'devices.cfg'
-    
-    def int_num(self, x):
-        try:
-            return int(x)
-        except:
-            return x
-    
-    def extract_id_with_group(self, msg):
-        t, args = self.msg.parse_payload(msg)
-        if t != 'ID' or len(args) < 4:
-            return (None, None, None)
-        
-        if args[0] != ACTIVITY:
-            self.enviar_usb('{{"type":"warning","msg":"activity_mismatch"}}'.format())
-            return (None, None, None)
-        
-        return (args[1], self.int_num(args[2]), args[3])
-    
-    def extract_answer_with_group(self, msg):
-        t, args = self.msg.parse_payload(msg)
-        if t != 'ANSWER':
-            return (None, None, None, [])
-        
-        if len(args) >= 4:
-            dev, grp, rl, opciones_raw = args[0], self.int_num(args[1]), args[2], args[3]
-        elif len(args) == 3:
-            dev = None
-            grp, rl, opciones_raw = self.int_num(args[0]), args[1], args[2]
-        elif len(args) == 2:
-            grp = rl = None
-            dev, opciones_raw = args[0], args[1]
-        else:
-            return (None, None, None, [])
-        
-        opciones = opciones_raw.split(',') if opciones_raw and ',' in opciones_raw else ([opciones_raw] if opciones_raw else [])
-        return (dev, grp, rl, opciones)
     
     def enviar_usb(self, mensaje):
         uart.write(mensaje + "\n")
@@ -83,16 +46,14 @@ class Concentrador:
         self.dispositivos_registrados.clear()
         
         self.enviar_usb('{"type":"discovery_start"}')
-        self.msg.send(self.msg.cmd_report())
+        self.msg.send(self.msg.cmd("REPORT"))
         self.enviar_usb('{"type":"debug","msg":"REPORT_enviado"}')
         
         inicio = running_time()
         while running_time() - inicio < 10000:
-            valid, tipo, data = self.msg.recibe_command(['ID'])
-            if valid and tipo == 'ID':
-                device_id, grupo, rol = self.extract_id_with_group(data)
-                if device_id and grupo and rol:
-                    self.procesar_id(device_id, grupo, rol)
+            valid, tipo, dev, grp, rol, valores = self.msg.recibe('ID', unpack=True)
+            if valid and len(valores) > 0 and valores[0] == ACTIVITY:
+                self.procesar_id(dev, grp, rol)
             sleep(10)
         
         # Enviar lista completa
@@ -123,7 +84,7 @@ class Concentrador:
             ))
         
         self.dispositivos_registrados[key] = device_id
-        self.msg.send(self.msg.cmd_ack(device_id))
+        self.msg.send(self.msg.cmd("ACK", device_id))
         
         self.enviar_usb('{{"type":"new_device","activity":"{}","device_id":"{}","grupo":{},"role":"{}"}}'.format(
             ACTIVITY, device_id, grupo, rol
@@ -133,7 +94,7 @@ class Concentrador:
     
     def broadcast_qparams(self, tipo, num_opciones):
         self.enviar_usb('{"type":"debug","msg":"BROADCAST_QPARAMS"}')
-        self.msg.send(self.msg.cmd_qparams(tipo, num_opciones))
+        self.msg.send(self.msg.cmd("QPARAMS", tipo, num_opciones))
         self.enviar_usb('{{"type":"qparams_sent","q_type":"{}","num_options":{}}}'.format(tipo, num_opciones))
         sleep(500)
         display.show(Image.ARROW_E)
@@ -152,15 +113,13 @@ class Concentrador:
             intentos = 0
             
             while intentos < 2 and respuesta is None:
-                self.msg.send(self.msg.command("POLL", grupo, rol))
+                self.msg.send(self.msg.cmd("POLL", grupo, rol))
                 
                 for _ in range(4):
-                    valid, tipo, data = self.msg.recibe_command(['ANSWER'])
-                    if valid and tipo == 'ANSWER':
-                        _, grp, rl, opciones = self.extract_answer_with_group(data)
-                        if grp == grupo and rl == rol:
-                            respuesta = opciones[0] if opciones else ""
-                            break
+                    valid, tipo, dev, grp, rl, valores = self.msg.recibe('ANSWER', unpack=True)
+                    if valid and grp == grupo and rl == rol:
+                        respuesta = valores[0] if valores else ""
+                        break
                     sleep(50)
                 
                 intentos += 1
@@ -183,18 +142,16 @@ class Concentrador:
         display.show(Image.GHOST)
         
         for (grupo, rol), device_id in self.dispositivos_registrados.items():
-            self.msg.send(self.msg.cmd_ping(device_id))
+            self.msg.send(self.msg.cmd("PING", device_id))
             
             inicio = running_time()
             recibio = False
             
             while running_time() - inicio < 1000:
-                valid, tipo, data = self.msg.recibe_command(['PONG'])
-                if valid and tipo == 'PONG':
-                    dev = self.msg.extract_device_id(data)
-                    if dev == device_id:
-                        recibio = True
-                        break
+                valid, tipo, payload = self.msg.recibe('PONG')
+                if valid and self.msg.extract_device_id(payload) == device_id:
+                    recibio = True
+                    break
                 sleep(10)
             
             estado = "online" if recibio else "offline"

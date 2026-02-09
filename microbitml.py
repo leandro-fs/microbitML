@@ -11,8 +11,7 @@ import radio
 import machine
 
 class RadioMessage:
-    def __init__(self, format="csv", activity='mbtml', channel=0):
-        self.format = format
+    def __init__(self, activity='mbtml', channel=0):
         self.activity = activity
         self.device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
         self.group = None
@@ -26,132 +25,108 @@ class RadioMessage:
         """Configura grupo, rol y canal"""
         self.group = str(group)
         self.role = str(role)
-        # Si se especifica un canal, reconfigurarlo
         if channel is not None and channel != self.channel:
             self.channel = channel
             radio.config(channel=channel, power=6, length=64, queue=10)
     
-    def encode(self, payload):
-        if self.format == "csv":
-            if self.group is None or self.role is None:
-                return None
-            payload_escaped = str(payload).replace(",", "_coma_")
-            if self.activity:
-                return "{},{},{},{}".format(self.activity, self.group, self.role, payload_escaped)
-            else:
-                return "{},{},{}".format(self.group, self.role, payload_escaped)
-        else:
-            return str(payload)
-    
-    def decode(self, raw_msg, valid_roles=None):
-        if not raw_msg:
-            return {'t': 'empty', 'm': None, 'g': None, 'd': None}
-        
-        msg_str = raw_msg.decode('utf-8') if isinstance(raw_msg, bytes) else str(raw_msg)
-        
-        if self.format == "csv":
-            partes = msg_str.split(',')
-            
-            if self.activity and len(partes) == 4:
-                activity_, grupo, rol, data = partes
-                if activity_ != self.activity:
-                    return {'t': 'activity_mismatch', 'm': None, 'g': None, 'd': None}
-            elif len(partes) == 3:
-                grupo, rol, data = partes
-            else:
-                return {'t': 'csv_invalid', 'm': None, 'g': None, 'd': msg_str}
-            
-            data_unescaped = data.replace("_coma_", ",")
-            
-            if valid_roles and rol not in valid_roles:
-                return {'t': 'filtered', 'm': rol, 'g': grupo, 'd': data_unescaped}
-            return {'t': 'csv_valid', 'm': rol, 'g': grupo, 'd': data_unescaped}
-        else:
-            return {'t': msg_str.split(':')[0] if ':' in msg_str else msg_str, 
-                    'm': None, 'g': None, 'd': msg_str}
-    
     def send(self, payload):
         """Envia payload por radio"""
-        encoded = self.encode(payload)
-        if encoded:
-            radio.send(encoded)
+        radio.send(str(payload))
     
-    def receive(self, valid_roles=None):
-        """Recibe mensaje raw de radio"""
+    def receive(self):
+        """Recibe mensaje raw de radio y retorna dict parseado"""
         raw = radio.receive()
-        if raw:
-            return self.decode(raw, valid_roles)
-        return None
+        if not raw:
+            return None
+        
+        msg_str = raw.decode('utf-8') if isinstance(raw, bytes) else str(raw)
+        
+        # Parsear comando
+        tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
+        return {'t': tipo, 'd': msg_str}
     
-    def recibe_csv(self, valid_roles=None):
-        """Helper para recepcion simple de mensajes CSV
-        Retorna: (valid, sender_role, payload)
+    def recibe(self, filter=None, unpack=False):
         """
-        m = self.receive(valid_roles)
-        if m and m['t'] == 'csv_valid':
-            return (True, m.get('m'), m.get('d'))
-        return (False, None, None)
-    
-    def recibe_command(self, expected_types=None):
-        """Helper para recepcion de comandos
-        Retorna: (valid, tipo_comando, payload)
+        filter: None (todo) | str | list de tipos comando
+        unpack: descompone payload packed
+        
+        Retorna:
+          unpack=False: (valid, tipo, payload)
+          unpack=True:  (valid, tipo, device_id, grupo, role, [valores])
         """
         m = self.receive()
-        if m and expected_types and m['t'] in expected_types:
+        
+        if not m:
+            return (False, None, None) if not unpack else (False, None, None, None, None, [])
+        
+        # Filtrar por tipo
+        expected_types = [filter] if isinstance(filter, str) else filter
+        
+        if expected_types and m['t'] not in expected_types:
+            return (False, None, None) if not unpack else (False, None, None, None, None, [])
+        
+        if not unpack:
             return (True, m['t'], m['d'])
-        elif m and not expected_types:
-            return (True, m['t'], m['d'])
-        return (False, None, None)
-    
-    def recibe_packed(self, msg):
-        t, args = self.msg.parse_payload(msg)
-        if t != 'ANSWER':
-            return (None, None, None, [])
+        
+        # Unpack
+        tipo, args = self.parse_payload(m['d'])
+        dev = grp = rol = None
+        valores = []
         
         if len(args) >= 4:
-            dev, grp, rl, opciones_raw = args[0], self._to_int_if_num(args[1]), args[2], args[3]
-        elif len(args) == 3:
-            dev = None
-            grp, rl, opciones_raw = self._to_int_if_num(args[0]), args[1], args[2]
-        elif len(args) == 2:
-            grp = rl = None
-            dev, opciones_raw = args[0], args[1]
+            dev, grp, rol, valores_raw = args[0], self._to_int(args[1]), args[2], args[3]
+        elif len(args) >= 3:
+            grp, rol, valores_raw = self._to_int(args[0]), args[1], args[2]
+        elif len(args) >= 2:
+            dev, valores_raw = args[0], args[1]
+        elif len(args) == 1:
+            valores_raw = args[0]
         else:
-            return (None, None, None, [])
+            return (True, tipo, dev, grp, rol, valores)
         
-        opciones = opciones_raw.split(',') if opciones_raw and ',' in opciones_raw else ([opciones_raw] if opciones_raw else [])
-        return (dev, grp, rl, opciones)
+        valores = valores_raw.split(',') if ',' in valores_raw else [valores_raw]
+        
+        return (True, tipo, dev, grp, rol, valores)
     
     def parse_payload(self, payload):
+        """Retorna (tipo, [args])"""
         if not payload:
             return (None, [])
         partes = str(payload).split(':')
         return (partes[0], partes[1:] if len(partes) > 1 else [])
     
     def is_for_me(self, message):
+        """Verifica si mensaje es para este device_id"""
         if not self.device_id or not message:
             return False
         tipo, args = self.parse_payload(message)
-        if args and len(args) > 0:
-            return args[0] == self.device_id
-        return False
+        return args and len(args) > 0 and args[0] == self.device_id
     
     def extract_device_id(self, message):
+        """Extrae device_id del mensaje"""
         tipo, args = self.parse_payload(message)
         return args[0] if args else None
     
     def extract_qparams(self, message):
+        """Extrae (tipo_pregunta, num_opciones)"""
         tipo, args = self.parse_payload(message)
         if len(args) >= 2:
             return (args[0], int(args[1]))
         return (None, None)
-      
+    
     def command(self, cmd, *args):
+        """Genera comando: CMD:arg1:arg2"""
         if args:
             return "{}:{}".format(cmd, ':'.join(str(a) for a in args))
-        return cmd  
+        return cmd
     
     def cmd(self, name, *args, device_id=False, gr=False, packed=False):
+        """
+        Genera comando con opciones:
+        - device_id: incluye self.device_id
+        - gr: incluye self.group y self.role
+        - packed: une args con coma
+        """
         params = []
         
         if device_id and self.device_id:
@@ -163,7 +138,6 @@ class RadioMessage:
                 params.append(self.role)
         
         if packed:
-            # Si args[0] es lista/tupla, usar directamente
             if len(args) == 1 and isinstance(args[0], (list, tuple)):
                 args = (','.join(str(a) for a in args[0]),)
             else:
@@ -171,6 +145,13 @@ class RadioMessage:
         
         params.extend(args)
         return self.command(name, *params)
+    
+    def _to_int(self, x):
+        """Convierte a int si es posible"""
+        try:
+            return int(x)
+        except:
+            return x
     
 
 
@@ -190,11 +171,16 @@ class ConfigManager:
     
     def load(self):
         try:
-            f = open(self.config_file)
-            for s in f.read().splitlines():
+            with open(self.config_file, 'r') as f:
+                content = f.read()       
+            if not content.strip():
+                return False
+            
+            for s in content.splitlines():
                 if '=' in s:
                     k, v = s.split('=', 1)
-                    k = k.strip(); v = v.strip()
+                    k = k.strip()
+                    v = v.strip()               
                     if k in self.config:
                         if k == 'grupo':
                             self.config[k] = int(v)
@@ -205,9 +191,9 @@ class ConfigManager:
                                 self.config[k] = int(v)
                             except:
                                 self.config[k] = v
-            f.close()
             return True
-        except:
+        except Exception as e:
+            print("CFG:Error:{}".format(str(e)))
             return False
 
     def save(self):

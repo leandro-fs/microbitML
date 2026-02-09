@@ -7,9 +7,7 @@ ACTIVITY = "cqz"
 
 class ClassQuiz:
     def __init__(self):
-        # Configuracion grupo:rol
         self.config = ConfigManager(
-            config_file='config.cfg',
             roles=['A', 'B', 'C', 'D', 'E', 'Z'],
             grupos_max=9,
             grupos_min=1
@@ -17,7 +15,7 @@ class ClassQuiz:
         self.config.load()
         
         g = self.config.get('grupo')
-        self.msg = RadioMessage(format="command", activity=ACTIVITY, channel=7)
+        self.msg = RadioMessage(activity=ACTIVITY, channel=7)
         self.msg.configure(group=g, role=self.config.get('role'))
         
         # Estado votacion
@@ -37,17 +35,7 @@ class ClassQuiz:
         except:
             ridx = 0
         slot = (g - 1) * len(self.config.roles) + ridx
-        return int((slot * 8750) / 53) if slot < 54 else 0 # -> 8.7 segundos
-    
-    def cmd_id_with_group(self):
-        g = self.config.get('grupo')
-        r = self.config.get('role')
-        return self.msg.command("ID", ACTIVITY, self.msg.device_id, g, r)
-    
-    def cmd_answer_with_group(self, respuesta):
-        g = self.config.get('grupo')
-        r = self.config.get('role')
-        return self.msg.command("ANSWER", self.msg.device_id, g, r, respuesta)
+        return int((slot * 8750) / 53) if slot < 54 else 0
     
     def log(self, mensaje):
         try:
@@ -61,8 +49,6 @@ class ClassQuiz:
         display.clear()
     
     def mostrar_config(self):
-        display.show(ACTIVITY)
-        sleep(500)
         display.show(str(self.config.get('role')))
         sleep(500)
         display.show(str(self.config.get('grupo')))
@@ -75,8 +61,7 @@ class ClassQuiz:
         self.log("Delay:{}ms".format(delay_ms))
         sleep(delay_ms)
         
-        comando = self.cmd_id_with_group()
-        self.msg.send(comando)
+        self.msg.send(self.msg.cmd("ID", ACTIVITY, device_id=True, gr=True))
         self.log("TX:ID")
     
     def procesar_ack(self, mensaje):
@@ -115,13 +100,11 @@ class ClassQuiz:
                 self.enviar_respuesta()
     
     def enviar_respuesta(self):
-        opciones_letras = ['A','B','C','D']
+        opciones_letras = ['A', 'B', 'C', 'D']
         respuestas = [opciones_letras[i] for i in range(len(self.seleccionadas)) if self.seleccionadas[i]]
-        respuesta_str = ','.join(respuestas) if respuestas else ""
         
-        comando = self.cmd_answer_with_group(respuesta_str)
-        self.msg.send(comando)
-        self.log("TX:ANSWER:{}".format(respuesta_str))
+        self.msg.send(self.msg.cmd("ANSWER", respuestas, device_id=True, gr=True, packed=True))
+        self.log("TX:ANSWER:{}".format(','.join(respuestas)))
         display.show(Image.ARROW_W)
         sleep(200)
         display.clear()
@@ -129,12 +112,12 @@ class ClassQuiz:
     def procesar_ping(self, mensaje):
         if self.msg.is_for_me(mensaje):
             self.log("RX:PING")
-            self.msg.send(self.msg.cmd_pong())
+            self.msg.send(self.msg.cmd("PONG", device_id=True))
             self.log("TX:PONG")
     
     def navegar_opcion(self):
         self.opcion_actual_idx = (self.opcion_actual_idx + 1) % self.num_opciones
-        self.log('NAV:{}'.format(['A','B','C','D'][self.opcion_actual_idx]))
+        self.log('NAV:{}'.format(['A', 'B', 'C', 'D'][self.opcion_actual_idx]))
         self.mostrar_estado_votacion()
     
     def toggle_seleccion(self):
@@ -147,30 +130,30 @@ class ClassQuiz:
                     self.seleccionadas[i] = False
         
         display.show(Image.YES if self.seleccionadas[idx] else Image.NO)
-        self.log('{}:{}'.format('SELECT' if self.seleccionadas[idx] else 'DESELECT', ['A','B','C','D'][idx]))
+        self.log('{}:{}'.format('SELECT' if self.seleccionadas[idx] else 'DESELECT', ['A', 'B', 'C', 'D'][idx]))
         sleep(400)
         self.mostrar_estado_votacion()
     
     def mostrar_estado_votacion(self):
-        letra = ['A','B','C','D'][self.opcion_actual_idx]
+        letra = ['A', 'B', 'C', 'D'][self.opcion_actual_idx]
         display.show(letra)
         if self.seleccionadas[self.opcion_actual_idx]:
             sleep(150)
             display.set_pixel(2, 2, 9)
     
     def manejar_mensajes_radio(self):
-        valid, tipo, data = self.msg.recibe_command()
+        valid, tipo, payload = self.msg.recibe()
         if valid:
             if tipo == 'REPORT':
                 self.procesar_report()
             elif tipo == 'ACK':
-                self.procesar_ack(data)
+                self.procesar_ack(payload)
             elif tipo == 'QPARAMS':
-                self.procesar_qparams(data)
+                self.procesar_qparams(payload)
             elif tipo == 'POLL':
-                self.procesar_poll(data)
+                self.procesar_poll(payload)
             elif tipo == 'PING':
-                self.procesar_ping(data)
+                self.procesar_ping(payload)
     
     def manejar_votacion(self):
         if self.registrado and self.tipo_pregunta is not None:
@@ -197,6 +180,8 @@ class ClassQuiz:
         while True:
             self.cambiar_config()
             if pin_logo.is_touched():
+                display.show(ACTIVITY)
+                sleep(500)
                 self.mostrar_config()
             self.manejar_mensajes_radio()
             self.manejar_votacion()

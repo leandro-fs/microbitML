@@ -10,16 +10,23 @@ SUMA_MAX = 22
 
 class PerceptronApp:
     def __init__(self):
-        self.config = ConfigManager(roles=['Z', 'A', 'B'], grupos_max=9, grupos_min=0, extra_fields={'valor': 0})
-        self.config.load()
-
+        self.config = ConfigManager(roles=['Z','A','B'], grupos_max=9, grupos_min=0, extra_fields={'valor':0})
+        
+        loaded = self.config.load()
+        print("Config_loaded:{}".format(loaded))
+        print("grupo:{}".format(self.config.get('grupo')))
+        print("role:{}".format(self.config.get('role')))
+        print("valor:{}".format(self.config.get('valor')))
+    
         if self.config.get('valor') is None:
             self.config.set('valor', 0)
-
+    
         g = self.config.get('grupo')
+        r = self.config.get('role')
+        
         self.msg = RadioMessage(activity=ACTIVITY, channel=g)
-        self.msg.configure(group=g, role=self.config.get('role'))
-
+        self.msg.configure(group=g, role=r)
+        
         self.suma_total = 0
         self.valor_a = 0
         self.valor_b = 0
@@ -40,17 +47,17 @@ class PerceptronApp:
     def actualizar_valor(self, delta, peso=1):
         if pin1.is_touched():
             return
-        valor = self.config.get('valor')
-        if valor is None:
-            valor = 0
-        valor = (valor + delta) % 10
-        self.config.set('valor', valor)
+        v = self.config.get('valor')
+        if v is None:
+            v = 0
+        v = (v + delta) % 10
+        self.config.set('valor', v)
         self.config.save()
-        vp = valor * peso
+        vp = v * peso
         self.mostrar_leds(vp)
         
         self.msg.send(self.msg.cmd("VALUE", vp, gr=True))
-        print("TX:{}:v={},peso={},vp={}".format(self.config.get('role'), valor, peso, vp))
+        print("TX:{}:v={},peso={},vp={}".format(self.config.get('role'), v, peso, vp))
 
     def rol_a(self):
         if button_a.was_pressed():

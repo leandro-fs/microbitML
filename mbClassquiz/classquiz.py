@@ -35,7 +35,7 @@ class ClassQuiz:
         except:
             ridx = 0
         slot = (g - 1) * len(self.config.roles) + ridx
-        return int((slot * 8750) / 53) if slot < 54 else 0
+        return int((slot * 5750) / 53) if slot < 54 else 0
     
     def log(self, mensaje):
         try:
@@ -169,7 +169,9 @@ class ClassQuiz:
                 while button_b.is_pressed():
                     sleep(50)
         elif self.registrado or button_a.was_pressed() or button_b.was_pressed():
-            self.mostrar_config()
+            display.show(Image.HEART)
+            sleep(100)
+            display.clear()
     
     def cambiar_config(self):
         if self.config.config_rg(pin1, button_a, button_b, self.mostrar_config):

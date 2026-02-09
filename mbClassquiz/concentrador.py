@@ -201,6 +201,41 @@ class Concentrador:
                 self.descubrimiento()
             if button_b.was_pressed():
                 self.verificar_estado()
+
+    def manejar_mensajes_radio(self):
+        """Escucha mensajes de radio (CHECK_REG principalmente)"""
+        valid, tipo, payload = self.msg.recibe()
+        
+        if not valid or not tipo:
+            return
+        
+        if tipo == 'CHECK_REG':
+            # Parsear manualmente: CHECK_REG:device_id:grupo:rol
+            _, args = self.msg.parse_payload(payload)
+            
+            if len(args) < 3:
+                self.enviar_usb('{"type":"warning","msg":"CHECK_REG_malformado"}')
+                return
+            
+            dev = args[0]
+            grp = self.msg._to_int(args[1])
+            rol = args[2]
+            
+            self.enviar_usb('{{"type":"debug","msg":"CHECK_REG:{}:G{}:{}"}}'.format(
+                dev[:8], grp, rol
+            ))
+            
+            if (grp, rol) in self.dispositivos_registrados:
+                stored_id = self.dispositivos_registrados[(grp, rol)]
+                if stored_id == dev:
+                    self.msg.send(self.msg.cmd("REG_STATUS", dev, "OK"))
+                    self.enviar_usb('{"type":"debug","msg":"REG_STATUS_OK"}')
+                else:
+                    self.msg.send(self.msg.cmd("REG_STATUS", dev, "CONFLICT"))
+                    self.enviar_usb('{"type":"debug","msg":"REG_STATUS_CONFLICT"}')
+            else:
+                self.msg.send(self.msg.cmd("REG_STATUS", dev, "NO"))
+                self.enviar_usb('{"type":"debug","msg":"REG_STATUS_NO"}')
     
     def run(self):
         self.enviar_usb('{"type":"debug","msg":"CONCENTRADOR_INICIADO"}')
@@ -213,6 +248,7 @@ class Concentrador:
             self.manejar_botones()
             if pin_logo.is_touched():
                 self.mostrar_config()
+            self.manejar_mensajes_radio()
             self.leer_usb()
             sleep(50)
 

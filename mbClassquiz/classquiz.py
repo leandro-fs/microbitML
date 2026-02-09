@@ -25,6 +25,10 @@ class ClassQuiz:
         self.seleccionadas = []
         self.registrado = False
         
+        # Estado verificacion registro
+        self.esperando_reg_status = True
+        self.tiempo_ultimo_check = running_time()
+        
         self.mostrar_inicio()
     
     def calc_discovery_delay(self):
@@ -141,10 +145,58 @@ class ClassQuiz:
             sleep(150)
             display.set_pixel(2, 2, 9)
     
+    def verificar_registro(self):
+        """Pregunta al concentrador si está registrado al arrancar"""
+        self.log("Verificando_registro")
+        
+        # Enviar PING al concentrador con mi device_id
+        self.msg.send(self.msg.cmd("CHECK_REG", device_id=True, gr=True))
+        
+        # Esperar respuesta 2 segundos
+        inicio = running_time()
+        while running_time() - inicio < 2000:
+            valid, tipo, payload = self.msg.recibe("REG_STATUS")
+            if valid and self.msg.is_for_me(payload):
+                _, args = self.msg.parse_payload(payload)
+                if len(args) >= 2 and args[1] == "OK":
+                    self.registrado = True
+                    self.log("Registro_recuperado")
+                    display.show(Image.YES)
+                    sleep(500)
+                    display.clear()
+                    return
+            sleep(50)
+        
+        self.log("No_registrado")
+
     def manejar_mensajes_radio(self):
         valid, tipo, payload = self.msg.recibe()
         if valid:
-            if tipo == 'REPORT':
+            if tipo == 'REG_STATUS' and self.esperando_reg_status:
+                if self.msg.is_for_me(payload):
+                    _, args = self.msg.parse_payload(payload)
+                    if len(args) >= 2:
+                        status = args[1]
+                        self.log("REG_STATUS:{}".format(status))
+                        if status == "OK":
+                            self.registrado = True
+                            self.esperando_reg_status = False
+                            self.log("Registro_recuperado")
+                            display.show(Image.YES)
+                            sleep(500)
+                            display.clear()
+                        elif status == "NO":
+                            # No registrado, esperar REPORT
+                            self.esperando_reg_status = False
+                            self.log("No_registrado_esperar_REPORT")
+                        elif status == "CONFLICT":
+                            # Conflicto - mostrar error
+                            self.esperando_reg_status = False
+                            self.log("CONFLICTO_grupo_rol")
+                            display.show(Image.SAD)
+                            sleep(1000)
+                            display.clear()
+            elif tipo == 'REPORT':
                 self.procesar_report()
             elif tipo == 'ACK':
                 self.procesar_ack(payload)
@@ -179,11 +231,19 @@ class ClassQuiz:
             self.msg.configure(group=ng, role=self.config.get('role'))
     
     def run(self):
+        # Enviar CHECK_REG al inicio
+        self.msg.send(self.msg.cmd("CHECK_REG", device_id=True, gr=True))
+        self.log("CHECK_REG_enviado")
+        
         while True:
+            # Reintentar CHECK_REG cada 5 segundos si aún esperando
+            if self.esperando_reg_status and running_time() - self.tiempo_ultimo_check > 5000:
+                self.msg.send(self.msg.cmd("CHECK_REG", device_id=True, gr=True))
+                self.tiempo_ultimo_check = running_time()
+                self.log("CHECK_REG_reintento")
+            
             self.cambiar_config()
             if pin_logo.is_touched():
-                display.show(ACTIVITY)
-                sleep(500)
                 self.mostrar_config()
             self.manejar_mensajes_radio()
             self.manejar_votacion()

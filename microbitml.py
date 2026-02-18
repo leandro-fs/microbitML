@@ -33,9 +33,9 @@ class RadioMessage:
         """Envia payload por radio"""
         radio.send(str(payload))
     
-    def receive(self):
+    def _read_radio(self):
         """Recibe mensaje raw de radio y retorna dict parseado"""
-        raw = radio.receive()
+        raw = radio._read_radio()
         if not raw:
             return None
         
@@ -45,7 +45,7 @@ class RadioMessage:
         tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
         return {'t': tipo, 'd': msg_str}
     
-    def recibe(self, filter=None, unpack=False):
+    def receive(self, filter=None, unpack=False):
         """
         filter: None (todo) | str | list de tipos comando
         unpack: descompone payload packed
@@ -54,7 +54,7 @@ class RadioMessage:
           unpack=False: (valid, tipo, payload)
           unpack=True:  (valid, tipo, device_id, grupo, role, [valores])
         """
-        m = self.receive()
+        m = self._read_radio()
         
         if not m:
             return (False, None, None) if not unpack else (False, None, None, None, None, [])

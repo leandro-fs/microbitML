@@ -51,7 +51,7 @@ class Concentrador:
         
         inicio = running_time()
         while running_time() - inicio < 10000:
-            valid, tipo, dev, grp, rol, valores = self.msg.recibe('ID', unpack=True)
+            valid, tipo, dev, grp, rol, valores = self.msg.receive('ID', unpack=True)
             if valid and len(valores) > 0 and valores[0] == ACTIVITY:
                 self.procesar_id(dev, grp, rol)
             sleep(10)
@@ -116,7 +116,7 @@ class Concentrador:
                 self.msg.send(self.msg.cmd("POLL", grupo, rol))
                 
                 for _ in range(4):
-                    valid, tipo, dev, grp, rl, valores = self.msg.recibe('ANSWER', unpack=True)
+                    valid, tipo, dev, grp, rl, valores = self.msg.receive('ANSWER', unpack=True)
                     if valid and grp == grupo and rl == rol:
                         respuesta = valores[0] if valores else ""
                         break
@@ -148,7 +148,7 @@ class Concentrador:
             recibio = False
             
             while running_time() - inicio < 1000:
-                valid, tipo, payload = self.msg.recibe('PONG')
+                valid, tipo, payload = self.msg.receive('PONG')
                 if valid and self.msg.extract_device_id(payload) == device_id:
                     recibio = True
                     break
@@ -204,7 +204,7 @@ class Concentrador:
 
     def manejar_mensajes_radio(self):
         """Escucha mensajes de radio (CHECK_REG principalmente)"""
-        valid, tipo, payload = self.msg.recibe()
+        valid, tipo, payload = self.msg.receive()
         
         if not valid or not tipo:
             return

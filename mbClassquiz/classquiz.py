@@ -155,7 +155,7 @@ class ClassQuiz:
         # Esperar respuesta 2 segundos
         inicio = running_time()
         while running_time() - inicio < 2000:
-            valid, tipo, payload = self.msg.recibe("REG_STATUS")
+            valid, tipo, payload = self.msg.receive("REG_STATUS")
             if valid and self.msg.is_for_me(payload):
                 _, args = self.msg.parse_payload(payload)
                 if len(args) >= 2 and args[1] == "OK":
@@ -170,7 +170,7 @@ class ClassQuiz:
         self.log("No_registrado")
 
     def manejar_mensajes_radio(self):
-        valid, tipo, payload = self.msg.recibe()
+        valid, tipo, payload = self.msg.receive()
         if valid:
             if tipo == 'REG_STATUS' and self.esperando_reg_status:
                 if self.msg.is_for_me(payload):

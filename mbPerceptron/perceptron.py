@@ -72,7 +72,7 @@ class PerceptronApp:
             self.actualizar_valor(1, STEP_B)
 
     def rol_z(self):
-        valid, tipo, payload = self.msg.recibe('VALUE')
+        valid, tipo, payload = self.msg.receive('VALUE')
         if valid:
             _, args = self.msg.parse_payload(payload)
             if len(args) >= 3:

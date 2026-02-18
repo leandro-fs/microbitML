@@ -353,7 +353,7 @@ Botón → handle_button() → encode() → radio.send()
 
 ### Flujo de recepción
 ```
-radio.receive() → on_message_received() → decode() → handle_message()
+radio._read_radio() → on_message_received() → decode() → handle_message()
 ```
 
 ---
@@ -374,7 +374,7 @@ EMISOR (Rol A)
          ↓
 RECEPTOR (Rol Z)
     │
-    ├─ radio.receive() → "pct,0,A,3"
+    ├─ radio._read_radio() → "pct,0,A,3"
     ├─ Pre-filtro: parts[2] != "Z" ✓
     ├─ packet.decode("pct,0,A,3", ("A","B"))
     │    ├─ Valida version: "pct" == "pct" ✓

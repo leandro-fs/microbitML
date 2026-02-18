@@ -100,7 +100,7 @@ Eventos estándar ClassQuiz:
 ```
 1. DOCENTE inicia quiz en ClassQuiz web
    ↓
-2. PROXY recibe evento "set_question_number"
+2. PROXY receive evento "set_question_number"
    ↓
 3. PROXY envía por USB: question_params
    ↓
@@ -245,7 +245,7 @@ Estudiantes pierden estado al presionar botón reset:
 2. Mismo canal radio: `radio.config(channel=7)`
 3. Revisar logs: display muestra "?" hasta ACK
 
-### Concentrador no recibe comandos USB
+### Concentrador no receive comandos USB
 
 1. Puerto correcto: `ls /dev/ttyACM*` (Linux) o Device Manager (Windows)
 2. Baudrate: 115200 default

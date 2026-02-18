@@ -69,7 +69,7 @@ msg.send(radio.send, msg.cmd_ping("device123"))  # "PING:device123"
 
 ```python
 # Leer mensaje del radio
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 
 if resultado:
     tipo = resultado['t']   # Tipo de mensaje
@@ -96,7 +96,7 @@ msg = RadioMessage(format="command")
 
 while True:
     # Recibir
-    resultado = msg.receive(radio.receive)
+    resultado = msg._read_radio(radio._read_radio)
     
     if resultado and resultado['t'] == 'ECHO':
         # Extraer payload
@@ -127,7 +127,7 @@ Broadcast para descubrimiento de dispositivos.
 msg.send(radio.send, msg.cmd_report())  # "REPORT"
 
 # Classquiz
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'REPORT':
     # Responder con ID
     msg.send(radio.send, msg.cmd_id())
@@ -155,7 +155,7 @@ Confirmar recepción.
 msg.send(radio.send, msg.cmd_ack("abc123"))  # "ACK:abc123"
 
 # Classquiz verifica si es para él
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'ACK':
     if msg.is_for_me(resultado['d']):
         display.show(Image.YES)
@@ -172,7 +172,7 @@ Verificar conectividad.
 msg.send(radio.send, msg.cmd_ping("abc123"))  # "PING:abc123"
 
 # Classquiz
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'PING':
     if msg.is_for_me(resultado['d']):
         msg.send(radio.send, msg.cmd_pong())  # "PONG:abc123"
@@ -189,7 +189,7 @@ Solicitar respuesta.
 msg.send(radio.send, msg.cmd_poll("abc123"))  # "POLL:abc123"
 
 # Classquiz
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'POLL':
     if msg.is_for_me(resultado['d']):
         # Enviar respuesta
@@ -219,7 +219,7 @@ Enviar parámetros de pregunta.
 msg.send(radio.send, msg.cmd_qparams("unica", 4))  # "QPARAMS:unica:4"
 
 # Classquiz
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'QPARAMS':
     tipo, num = msg.extract_qparams(resultado['d'])
     # tipo = "unica", num = 4
@@ -335,7 +335,7 @@ while True:
         display.show(Image.ARROW_E)
     
     # Escuchar PONGs
-    resultado = msg.receive(radio.receive)
+    resultado = msg._read_radio(radio._read_radio)
     if resultado and resultado['t'] == 'PONG':
         remote_id = msg.extract_device_id(resultado['d'])
         display.scroll(remote_id[:4], delay=60)
@@ -359,7 +359,7 @@ radio.on()
 msg = RadioMessage(format="command", device_id=device_id)
 
 while True:
-    resultado = msg.receive(radio.receive)
+    resultado = msg._read_radio(radio._read_radio)
     
     if resultado and resultado['t'] == 'PING':
         # Responder PONG
@@ -531,7 +531,7 @@ while True:
         display.show(Image.ASLEEP)
     
     # Recibir respuestas
-    resultado = msg.receive(radio.receive)
+    resultado = msg._read_radio(radio._read_radio)
     if resultado and resultado['t'] == 'ANSWER':
         device, opciones = msg.extract_answer(resultado['d'])
         votos[device] = opciones[0] if opciones else ""
@@ -566,7 +566,7 @@ idx = 0
 
 while True:
     # Recibir parámetros
-    resultado = msg.receive(radio.receive)
+    resultado = msg._read_radio(radio._read_radio)
     
     if resultado and resultado['t'] == 'QPARAMS':
         tipo, num = msg.extract_qparams(resultado['d'])
@@ -651,7 +651,7 @@ def extract_answer_with_group(msg_obj, mensaje):
     return (device_id, grupo, rol, opciones)
 
 # Usar
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado and resultado['t'] == 'ID':
     device_id, grupo, rol = extract_id_with_group(msg, resultado['d'])
     print("Device: {} Grupo: {} Rol: {}".format(device_id, grupo, rol))
@@ -664,7 +664,7 @@ if resultado and resultado['t'] == 'ID':
 ### 1. Siempre verificar resultados
 
 ```python
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado:  # Puede ser None
     if resultado['t'] == 'ESPERADO':
         # Procesar
@@ -744,7 +744,7 @@ radio.config(channel=7, power=6, length=64)
 radio.on()
 
 # Agregar logs
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado:
     print("RX: {}".format(resultado['d']))
 ```
@@ -771,7 +771,7 @@ if not success:
 
 ```python
 # Verificar tipo exacto
-resultado = msg.receive(radio.receive)
+resultado = msg._read_radio(radio._read_radio)
 if resultado:
     print("Tipo: '{}'".format(resultado['t']))
     print("Data: '{}'".format(resultado['d']))

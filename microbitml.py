@@ -13,7 +13,7 @@ import machine
 
 # Objeto reutilizable que retorna receive()
 # Siempre es la misma instancia, se resetea en cada llamada
-class RadioMsg:
+class Message:
     def __init__(self):
         self.valid = False   # True si se recibio un mensaje valido
         self.name = None     # Tipo de comando (ej: 'ID', 'POLL')
@@ -32,14 +32,14 @@ class RadioMsg:
         self.valores = []
 
 
-class RadioMessage:
+class Radio:
     def __init__(self, activity='mbtml', channel=0):
         self.activity = activity
         self.device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
         self.group = None
         self.role = None
         self.channel = channel
-        self._resultado = RadioMsg()  # instancia unica reutilizable
+        self._resultado = Message()  # instancia unica reutilizable
 
         radio.on()
         radio.config(channel=channel, power=6, length=64, queue=10)
@@ -64,7 +64,7 @@ class RadioMessage:
         radio.send(str(payload))
 
     # Lee un mensaje raw de radio y retorna dict {t: tipo, d: mensaje_completo}
-    def _read_radio(self):
+    def _read(self):
         raw = radio.receive()
         if not raw:
             return None
@@ -72,7 +72,7 @@ class RadioMessage:
         tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
         return {'t': tipo, 'd': msg_str}
 
-    # Recibe un mensaje y retorna el objeto RadioMsg reutilizable
+    # Recibe un mensaje y retorna el objeto Message reutilizable
     # filter: None (todo) | str | list de tipos de comando
     # Estructura del mensaje esperada segun cantidad de args:
     #   4 args -> devID:grp:rol:valores
@@ -83,7 +83,7 @@ class RadioMessage:
         r = self._resultado
         r._reset()
 
-        m = self._read_radio()
+        m = self._read()
         if not m:
             return r
 
@@ -92,7 +92,7 @@ class RadioMessage:
         if expected_types and m['t'] not in expected_types:
             return r
 
-        tipo, args = self.parse_payload(m['d'])
+        tipo, args = self._parse(m['d'])
         r.name = tipo
 
         if len(args) >= 4:
@@ -118,33 +118,33 @@ class RadioMessage:
         return r
 
     # Parsea payload y retorna (tipo, [args])
-    def parse_payload(self, payload):
+    def _parse(self, payload):
         if not payload:
             return (None, [])
         partes = str(payload).split(':')
         return (partes[0], partes[1:] if len(partes) > 1 else [])
 
     # Verifica si el mensaje esta dirigido a este device_id
-    def is_for_me(self, message):
+    def addressed_to_me(self, message):
         if not self.device_id or not message:
             return False
-        tipo, args = self.parse_payload(message)
+        tipo, args = self._parse(message)
         return args and len(args) > 0 and args[0] == self.device_id
 
     # Extrae device_id del primer argumento del mensaje
-    def extract_device_id(self, message):
-        tipo, args = self.parse_payload(message)
+    def _sender_id(self, message):
+        tipo, args = self._parse(message)
         return args[0] if args else None
 
     # Extrae (tipo_pregunta, num_opciones) de un mensaje QPARAMS
-    def extract_qparams(self, message):
-        tipo, args = self.parse_payload(message)
+    def _qparams(self, message):
+        tipo, args = self._parse(message)
         if len(args) >= 2:
             return (args[0], int(args[1]))
         return (None, None)
 
-    # Genera string de comando: CMD:arg1:arg2:...
-    def command(self, cmd, *args):
+    # Construye string de comando: CMD:arg1:arg2:...
+    def _build(self, cmd, *args):
         if args:
             return "{}:{}".format(cmd, ':'.join(str(a) for a in args))
         return cmd
@@ -171,7 +171,7 @@ class RadioMessage:
                 args = (','.join(str(a) for a in args),)
 
         params.extend(args)
-        return self.command(name, *params)
+        return self._build(name, *params)
 
     # Convierte a int si es posible, sino retorna el valor original
     def _to_int(self, x):
@@ -240,14 +240,14 @@ class ConfigManager:
             self.config[key] = value
 
     # Avanza al siguiente rol en la lista de roles
-    def cycle_role(self):
+    def next_role(self):
         idx = self.roles.index(self.config['role']) if self.config['role'] in self.roles else 0
         idx = (idx + 1) % len(self.roles)
         self.config['role'] = self.roles[idx]
         return self.config['role']
 
     # Avanza al siguiente grupo dentro del rango configurado
-    def cycle_grupo(self):
+    def next_group(self):
         g = self.config.get('grupo', self.grupos_min)
         rango = self.grupos_max - self.grupos_min + 1
         g = ((g - self.grupos_min + 1) % rango) + self.grupos_min
@@ -263,7 +263,7 @@ class ConfigManager:
         changed = False
         while p1.is_touched():
             if ba.was_pressed():
-                self.cycle_role()
+                self.next_role()
                 self.save()
                 changed = True
                 if cb:
@@ -272,7 +272,7 @@ class ConfigManager:
                     sleep(50)
 
             if bb.was_pressed():
-                self.cycle_grupo()
+                self.next_group()
                 self.save()
                 changed = True
                 if cb:

@@ -50,10 +50,10 @@ class Radio:
             radio.config(channel=channel, power=6, length=64, queue=10)
 
     # Envia mensaje por radio
-    def send(self, name, *args, device_id=False, gr=False, packed=False, CMD=True):
+    def send(self, name, *args, device_id=False, packed=False, CMD=True):
         if CMD:
-            s = '_DGR' if device_id and gr else '_D' if device_id else '_GR' if gr else '_N'
-            payload = self.cmd(name + s, *args, device_id=device_id, gr=gr, packed=packed)
+            s = '_DGR' if device_id else '_GR'
+            payload = self.cmd(name + s, *args, device_id=device_id, gr=True, packed=packed)
         else:
             payload = name
         radio.send(str(payload))
@@ -68,7 +68,7 @@ class Radio:
         return {'t': tipo, 'd': msg_str}
 
     # Recibe un mensaje, retorna Message
-    def receive(self, filter=None):
+    def receive(self, filter=None, full=False):
         r = self._resultado
         r._reset()
         m = self._read()
@@ -77,23 +77,26 @@ class Radio:
         tipo, args = self._parse(m['d'])
         if not tipo:
             return r
-        sufijo = '_DGR' if tipo.endswith('_DGR') else '_GR' if tipo.endswith('_GR') else '_D' if tipo.endswith('_D') else '_N' if tipo.endswith('_N') else ''
+        sufijos = ('_DGR', '_GR')
+        sufijo = next((s for s in sufijos if tipo.endswith(s)), '')
         r.name = tipo[:-len(sufijo)] if sufijo else tipo
-        expected_types = [filter] if isinstance(filter, str) else filter
-        if expected_types and r.name not in expected_types:
+        expected = [filter] if isinstance(filter, str) else filter
+        if expected and r.name not in expected:
             return r
         vr = None
-        if sufijo == '_DGR' and len(args) >= 3:
+        if sufijo == '_DGR':
+            if len(args) < 3: return r
             r.devID, r.grp, r.rol = args[0], self._to_int(args[1]), args[2]
-            vr = args[3] if len(args) >= 4 else None
-        elif sufijo == '_GR' and len(args) >= 2:
+            if len(args) >= 4: vr = args[3]
+        elif sufijo == '_GR':
+            if len(args) < 2: return r
             r.grp, r.rol = self._to_int(args[0]), args[1]
-            vr = args[2] if len(args) >= 3 else None
-        elif sufijo == '_D' and len(args) >= 1:
-            r.devID = args[0]
-            vr = args[1] if len(args) >= 2 else None
-        elif len(args) >= 1:
-            vr = ','.join(str(a) for a in args)
+            if len(args) >= 3: vr = args[2]
+        else:
+            if len(args) >= 1: vr = ','.join(str(a) for a in args)
+        if not full and r.grp is not None:
+            if r.grp != 0 and str(r.grp) != str(self.group):
+                return r
         if vr is not None:
             r.valores = vr.split(',') if ',' in vr else [vr]
         r.valid = True

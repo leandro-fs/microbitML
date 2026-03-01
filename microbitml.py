@@ -147,7 +147,7 @@ class Radio:
 
 # Persistencia de configuracion en flash
 class ConfigManager:
-    def __init__(self, config_file='config.cfg', roles=None, grupos_max=9, grupos_min=0, extra_fields=None):
+    def __init__(self, config_file='config.cfg', roles=None, grupos_max=9, grupos_min=1, extra_fields=None):
         self.config_file = config_file
         self.roles = roles or ['A', 'B', 'Z']
         self.grupos_max = grupos_max

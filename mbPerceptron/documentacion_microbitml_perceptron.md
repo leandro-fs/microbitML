@@ -32,7 +32,7 @@ Rol B (peso=2, max=6) ──┘
 ```python
 CONFIG_FILE = 'config.cfg'       # Archivo persistencia
 message_bus_max = 9              # Bus máximo (0-9)
-version_token = "pct"            # Token de versión
+activity = "pct"            # Actividad
 ```
 
 ### Pesos y Límites
@@ -44,9 +44,9 @@ role_counter_max = {"A": 3, "B": 6}       # Límites superiores
 ### Validación de Mensajes
 ```python
 valid_origin_roles_per_destination = {
-    "A": list(),      # A no recibe mensajes
-    "B": list(),      # B no recibe mensajes
-    "Z": ("A", "B")   # Z recibe de A y B
+    "A": list(),      # A no receive mensajes
+    "B": list(),      # B no receive mensajes
+    "Z": ("A", "B")   # Z receive de A y B
 }
 ```
 
@@ -275,7 +275,7 @@ Botón B: contador -= increment (respeta min 0)
 
 ### Secuencia de Inicio
 ```python
-1. display.scroll(version_token)  # Muestra "pct"
+1. display.scroll(activity)  # Muestra "pct"
 2. load_config()                  # Carga rol y bus
 3. packet_input/output = RadioPacket()
 4. radio.on() + config(group=153)
@@ -298,7 +298,7 @@ while True:
     if pin_logo.is_touched():
         pin_logo_is_touched()
     
-    message = radio.receive()
+    message = radio._read_radio()
     if message:
         on_message_received(message)
 ```
@@ -316,7 +316,7 @@ Botón → handle_button() → counter[self.role] → display → radio.send()
 
 ### Salida (Rol Z)
 ```
-radio.receive() → on_message_received() → handle_message() 
+radio._read_radio() → on_message_received() → handle_message() 
 → counter[origen] → update_output() → display + beep
 ```
 

@@ -1,270 +1,240 @@
-# microbitml.py - Protocolo simple de comunicacion radio para micro:bit
+#
+# microbit-module: microbitml@1.0.0
+#
+# ---
+# microbitml.py
+# Libreria de comunicacion radio para micro:bit
 
-__all__ = ["RadioProtocol"]
+from microbit import display, sleep
+import radio
+import machine
 
-class RadioProtocol:
-    """
-    Protocolo basico para comunicacion entre microbits
-    Sin dependencias externas para evitar imports circulares
-    """
-    
-    def __init__(self, device_id=None):
-        """
-        Inicializa el protocolo
-        device_id: ID opcional del dispositivo (para estudiantes)
-        """
-        self.device_id = device_id
-        self.registered = False
-    
-    # === COMANDOS BROADCAST ===
-    
-    @staticmethod
-    def crear_report():
-        """Crea mensaje REPORT para descubrimiento"""
-        return "REPORT"
-    
-    @staticmethod
-    def crear_question(question_data):
-        """Crea mensaje QUESTION con datos de pregunta"""
-        return f"QUESTION:{question_data}"
-    
-    @staticmethod
-    def crear_ping(device_id):
-        """Crea mensaje PING para dispositivo especifico"""
-        return f"PING:{device_id}"
-    
-    # === RESPUESTAS INDIVIDUALES ===
-    
-    def crear_id_response(self):
-        """Crea respuesta ID con device_id propio"""
-        if not self.device_id:
-            raise ValueError("device_id no configurado")
-        return f"ID:{self.device_id}"
-    
-    @staticmethod
-    def crear_ack(device_id):
-        """Crea ACK para device_id especifico"""
-        return f"ACK:{device_id}"
-    
-    @staticmethod
-    def crear_pong(device_id):
-        """Crea respuesta PONG"""
-        return f"PONG:{device_id}"
-    
-    def crear_answer(self, opciones):
-        """
-        Crea respuesta con opciones guardadas
-        opciones: lista de strings, ej: ['A', 'B', 'C']
-        """
-        if not self.device_id:
-            raise ValueError("device_id no configurado")
-        opciones_str = ','.join(opciones)
-        return f"ANSWER:{self.device_id}:{opciones_str}"
-    
-    # === DECODIFICACION ===
-    
-    @staticmethod
-    def decodificar(mensaje):
-        """
-        Decodifica mensaje recibido
-        Retorna: (tipo, datos)
-        Tipos: REPORT, QUESTION, PING, ID, ACK, PONG, ANSWER
-        """
-        if not mensaje:
-            return (None, None)
-        
-        # Mensajes sin payload
-        if mensaje == "REPORT":
-            return ("REPORT", None)
-        
-        # Mensajes con payload
-        if ':' in mensaje:
-            partes = mensaje.split(':', 1)
-            tipo = partes[0]
-            datos = partes[1] if len(partes) > 1 else None
-            return (tipo, datos)
-        
-        return (None, None)
-    
-    @staticmethod
-    def extraer_device_id(mensaje):
-        """
-        Extrae device_id de mensajes tipo ID:xxx, ACK:xxx, PING:xxx
-        Retorna: device_id o None
-        """
-        tipo, datos = RadioProtocol.decodificar(mensaje)
-        if tipo in ["ID", "ACK", "PING", "PONG"]:
-            return datos
-        return None
-    
-    @staticmethod
-    def extraer_answer(mensaje):
-        """
-        Extrae respuesta de mensaje ANSWER:device_id:A,B,C
-        Retorna: (device_id, [opciones]) o (None, None)
-        """
-        tipo, datos = RadioProtocol.decodificar(mensaje)
-        if tipo == "ANSWER" and datos:
-            partes = datos.split(':', 1)
-            if len(partes) == 2:
-                device_id = partes[0]
-                opciones = partes[1].split(',')
-                return (device_id, opciones)
-        return (None, None)
-    
-    # === VALIDACION ===
-    
-    def validar_ack(self, mensaje):
-        """Verifica si el ACK es para este dispositivo"""
-        device_id = self.extraer_device_id(mensaje)
-        return device_id == self.device_id
-    
-    def validar_ping(self, mensaje):
-        """Verifica si el PING es para este dispositivo"""
-        device_id = self.extraer_device_id(mensaje)
-        return device_id == self.device_id
-    
-    # === ESTADO ===
-    
-    def marcar_registrado(self):
-        """Marca dispositivo como registrado"""
-        self.registered = True
-    
-    def resetear_registro(self):
-        """Resetea estado de registro"""
-        self.registered = False
-    
-    def esta_registrado(self):
-        """Retorna si el dispositivo esta registrado"""
-        return self.registered
-
-
-# === FUNCIONES DE UTILIDAD ===
-
-def test_protocol():
-    """Test basico del protocolo"""
-    print("=== Test RadioProtocol ===")
-    
-    # Crear protocolo
-    proto = RadioProtocol(device_id="aabbccdd")
-    
-    # Test mensajes broadcast
-    assert proto.crear_report() == "REPORT"
-    assert proto.crear_ping("1234") == "PING:1234"
-    
-    # Test respuestas
-    assert proto.crear_id_response() == "ID:aabbccdd"
-    assert proto.crear_ack("1234") == "ACK:1234"
-    assert proto.crear_answer(['A', 'C']) == "ANSWER:aabbccdd:A,C"
-    
-    # Test decodificacion
-    assert proto.decodificar("REPORT") == ("REPORT", None)
-    assert proto.decodificar("ID:1234") == ("ID", "1234")
-    assert proto.decodificar("ACK:aabbccdd") == ("ACK", "aabbccdd")
-    
-    # Test extraccion
-    assert proto.extraer_device_id("ID:1234") == "1234"
-    assert proto.extraer_answer("ANSWER:dev1:A,B") == ("dev1", ["A", "B"])
-    
-    # Test validacion
-    assert proto.validar_ack("ACK:aabbccdd") == True
-    assert proto.validar_ack("ACK:1234") == False
-    
-    print("Todos los tests pasaron!")
-
-
-if __name__ == "__main__":
-    test_protocol()
-# microbitml.py - Radio communication module
-__all__ = ["test_module_import", "RadioPacket"]
-
-def test_module_import():
-    print("microbitml module loaded successfully")
-
-class RadioPacket():
-    # Formato: version_token,message_bus,sender_role,payload
-    
+# Objeto retornado por receive()
+class Message:
     def __init__(self):
-        self.fixed_role = None  # Rol fijo, si se asigna
-        self.fixed_bus = None   # Bus fijo, si se asigna
-    
-    def encode(self, payload):
-        from main import version_token, message_bus, current_role
-        
-        # CORRECCION: Usar valores fijos si existen, sino usar globals
-        sender_role = self.fixed_role if self.fixed_role else current_role
-        sender_bus = self.fixed_bus if self.fixed_bus is not None else message_bus
-        
-        encoded_message = version_token + ","
-        encoded_message += "{},".format(sender_bus)
-        encoded_message += "{},".format(sender_role)
-        encoded_message += str(payload).replace(",", "_coma_")
-        
-        return encoded_message
-    
-    def decode(self, received_message, valid_origin_roles):
-        from main import version_token, message_bus, current_role, error_handler
-        
-        is_valid = False
-        status_description = ""
-        sender_role = ""
-        decoded_payload = ""
-        
-        # CORRECCION: Usar bus fijo si existe
-        expected_bus = self.fixed_bus if self.fixed_bus is not None else message_bus
-        
-        message_parts = received_message.split(",")
-        
-        try:
-            # Validar version
-            received_version = message_parts[0]
-            if received_version != version_token:
-                status_description = "parts[version_token]={}, expected:{}".format(
-                    received_version, version_token
-                )
-                #error_handler(halt=False, error_code=9, description=status_description)
-                print("DEBUG: packet ignored, {}".format(status_description))
-                raise ValueError
-            
-            # Validar bus
-            received_bus = message_parts[1]
-            if received_bus != str(expected_bus):
-                status_description = "parts[message_bus]:{}, expected:{}".format(
-                    received_bus, str(expected_bus)
-                )
-                raise ValueError
-            
-            # Validar rol origen
-            received_role = message_parts[2]
-            
-            # Verificar si rol esta en roles validos
-            if received_role in valid_origin_roles:
-                sender_role = received_role
+        self.valid = False
+        self.act = None
+        self.name = None
+        self.devID = None
+        self.grp = None
+        self.rol = None
+        self.valores = []
+
+    def _reset(self):
+        self.valid = False
+        self.act = None
+        self.name = None
+        self.devID = None
+        self.grp = None
+        self.rol = None
+        self.valores = []
+
+
+# Manejo de comunicacion radio
+class Radio:
+    def __init__(self, activity='mbtml', channel=0):
+        self.activity = activity[:5]
+        self.device_id = ''.join(['{:02x}'.format(b) for b in machine.unique_id()])
+        self.group = None
+        self.role = None
+        self.channel = channel
+        self.radio = radio
+        self._resultado = Message()
+        radio.on()
+        radio.config(channel=channel, power=6, length=64, queue=10)
+
+    # Asigna grupo, rol y canal
+    def configure(self, group, role, channel=None):
+        self.group = str(group)
+        self.role = str(role)
+        if channel is not None and channel != self.channel:
+            self.channel = channel
+            radio.config(channel=channel, power=6, length=64, queue=10)
+
+    # Envia mensaje por radio
+    def send(self, name, *args, device_id=False, packed=False, CMD=True):
+        if CMD:
+            s = '_DGR' if device_id else '_GR'
+            payload = self.activity + ':' + self.cmd(name + s, *args, device_id=device_id, gr=True, packed=packed)
+        else:
+            payload = name
+        radio.send(str(payload))
+
+    def _read(self):
+        raw = radio.receive()
+        if not raw:
+            return None
+        msg_str = str(raw)
+        print("RAW:{}".format(msg_str))
+        tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
+        return {'t': tipo, 'd': msg_str}
+
+    # Recibe un mensaje, retorna Message
+    # full=True: acepta mensajes de cualquier grupo (para concentrador)
+    def receive(self, filter=None, full=False):
+        r = self._resultado
+        r._reset()
+        m = self._read()
+        if not m:
+            return r
+        all_parts, args = self._parse(m['d'])
+        if not all_parts or len(args) < 1:
+            return r
+        r.act = all_parts
+        if r.act != self.activity:
+            return r
+        tipo = args[0]
+        args = args[1:]
+        sufijos = ('_DGR', '_GR')
+        sufijo = next((s for s in sufijos if tipo.endswith(s)), '')
+        r.name = tipo[:-len(sufijo)] if sufijo else tipo
+        expected = [filter] if isinstance(filter, str) else filter
+        if expected and r.name not in expected:
+            return r
+        vr = None
+        if sufijo == '_DGR':
+            if len(args) < 3: return r
+            r.devID, r.grp, r.rol = args[0], self._to_int(args[1]), args[2]
+            if len(args) >= 4: vr = args[3]
+        elif sufijo == '_GR':
+            if len(args) < 2: return r
+            r.grp, r.rol = self._to_int(args[0]), args[1]
+            if len(args) >= 3: vr = args[2]
+        else:
+            if len(args) >= 1: vr = ','.join(str(a) for a in args)
+        if not full and r.grp is not None:
+            if r.grp != 0 and str(r.grp) != str(self.group):
+                return r
+        if vr is not None:
+            r.valores = vr.split(',') if ',' in vr else [vr]
+        r.valid = True
+        return r
+
+    def _parse(self, payload):
+        if not payload:
+            return (None, [])
+        partes = str(payload).split(':')
+        return (partes[0], partes[1:] if len(partes) > 1 else [])
+
+    def _build(self, cmd, *args):
+        if args:
+            return "{}:{}".format(cmd, ':'.join(str(a) for a in args))
+        return cmd
+
+    def cmd(self, name, *args, device_id=False, gr=False, packed=False):
+        params = []
+        if device_id and self.device_id:
+            params.append(self.device_id)
+        if gr:
+            if self.group:
+                params.append(self.group)
+            if self.role:
+                params.append(self.role)
+        if packed:
+            if len(args) == 1 and isinstance(args[0], (list, tuple)):
+                args = (','.join(str(a) for a in args[0]),)
             else:
-                status_description = "parts[originRoles]: {} not in '{}'".format(
-                    received_role, str(valid_origin_roles)
-                )
-                # Detectar clonacion de roles (mismo rol, diferente dispositivo)
-                # NOTA: Con el filtro en on_message_received(), esto solo detecta
-                # clonacion REAL si dos dispositivos distintos tienen el mismo rol
-                if received_role == current_role:
-                    error_handler(
-                        halt=True, 
-                        error_code=1, 
-                        description="Role cloning detected: {}".format(current_role)
-                    )
-                raise ValueError
-            
-            # Descodificar payload
-            raw_payload = message_parts[3]
-            decoded_payload = raw_payload.replace("_coma_", ",")
-            
-            is_valid = True
-            status_description = "OK"
-            
+                args = (','.join(str(a) for a in args),)
+        params.extend(args)
+        return self._build(name, *params)
+
+    def _to_int(self, x):
+        try:
+            return int(x)
+        except:
+            return x
+
+
+# Persistencia de configuracion en flash
+class ConfigManager:
+    def __init__(self, config_file='config.cfg', roles=None, grupos_max=9, grupos_min=1, extra_fields=None):
+        self.config_file = config_file
+        self.roles = roles or ['A', 'B', 'Z']
+        self.grupos_max = grupos_max
+        self.grupos_min = grupos_min
+        self.config = {'role': self.roles[0], 'grupo': self.grupos_min}
+        if extra_fields:
+            self.config.update(extra_fields)
+
+    # Carga config desde archivo
+    def load(self):
+        try:
+            with open(self.config_file, 'r') as f:
+                content = f.read().strip()
+            if not content:
+                return False
+            for linea in content.split('\n'):
+                if '=' in linea:
+                    k, v = linea.split('=', 1)
+                    k, v = k.strip(), v.strip()
+                    if k in self.config:
+                        if k == 'grupo':
+                            self.config[k] = int(v)
+                        elif v == 'None':
+                            self.config[k] = None
+                        else:
+                            try:
+                                self.config[k] = int(v)
+                            except:
+                                self.config[k] = v
+            return True
         except Exception as e:
-            print("DEBUG:RadioPacket.decode:exception={},desc={},received_message='{}'".format(
-                e, status_description, received_message
-            ))
-        
-        return is_valid, status_description, sender_role, decoded_payload
+            print("CFG:Error:{}".format(str(e)))
+            return False
+
+    # Guarda config en archivo
+    def save(self):
+        try:
+            f = open(self.config_file, 'w')
+            for k in self.config:
+                f.write("{}={}\n".format(k, self.config[k]))
+            f.close()
+            return True
+        except:
+            return False
+
+    # Obtiene un valor de config
+    def get(self, key):
+        return self.config.get(key)
+
+    # Modifica un valor de config
+    def set(self, key, value):
+        if key in self.config:
+            self.config[key] = value
+
+    # Avanza al siguiente rol
+    def next_role(self):
+        idx = self.roles.index(self.config['role']) if self.config['role'] in self.roles else 0
+        self.config['role'] = self.roles[(idx + 1) % len(self.roles)]
+        return self.config['role']
+
+    # Avanza al siguiente grupo
+    def next_group(self):
+        g = self.config.get('grupo', self.grupos_min)
+        rango = self.grupos_max - self.grupos_min + 1
+        self.config['grupo'] = ((g - self.grupos_min + 1) % rango) + self.grupos_min
+        return self.config['grupo']
+
+    # Modo configuracion: pin1 + botones A/B
+    def config_rg(self, p1, ba, bb, cb=None):
+        if not p1.is_touched():
+            return False
+        sleep(200)
+        changed = False
+        while p1.is_touched():
+            if ba.was_pressed():
+                self.next_role()
+                self.save()
+                changed = True
+                if cb: cb()
+                while ba.is_pressed(): sleep(50)
+            if bb.was_pressed():
+                self.next_group()
+                self.save()
+                changed = True
+                if cb: cb()
+                while bb.is_pressed(): sleep(50)
+            sleep(50)
+        display.clear()
+        sleep(200)
+        return changed

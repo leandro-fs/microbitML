@@ -62,7 +62,7 @@ class Radio:
         if not raw:
             return None
         msg_str = str(raw)
-        print("RAW:{}".format(msg_str))
+        #print("RAW:{}".format(msg_str))
         tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
         return {'t': tipo, 'd': msg_str}
 

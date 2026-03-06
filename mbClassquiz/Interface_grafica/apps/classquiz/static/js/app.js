@@ -22,6 +22,16 @@ socket.on('connect', () => {
     console.log('[Socket.IO] Conectado al servidor');
     actualizarEstadoConexion(true);
     agregarLog('INFO', 'Conectado al servidor Flask');
+    // Cargar dispositivos existentes al conectar
+    fetch(`${BASE}/api/dispositivos`)
+        .then(r => r.json())
+        .then(data => {
+            data.dispositivos.forEach(d => {
+                state.dispositivos[d.device_id] = d;
+            });
+            actualizarTablaDispositivos();
+            actualizarEstadisticas();
+        });
 });
 
 socket.on('disconnect', () => {
@@ -45,6 +55,47 @@ socket.on('dispositivos_actualizados', (data) => {
     state.dispositivos = nuevosDispositivos;
     actualizarTablaDispositivos();
     actualizarEstadisticas();
+});
+
+socket.on('new_device', (data) => {
+    console.log('[Socket.IO] new_device:', data);
+    const id = data.device_id;
+    if (id) {
+        state.dispositivos[id] = {
+            device_id: id,
+            grp:       data.grp,
+            rol:       data.rol,
+            nombre:    data.nombre || id.substring(0, 8),
+            estado:    'registrado',
+            actividad: data.actividad || '',
+            conectado: false
+        };
+        actualizarTablaDispositivos();
+        actualizarEstadisticas();
+    }
+});
+
+socket.on('discovery_end', (data) => {
+    console.log('[Socket.IO] discovery_end:', data);
+    actualizarTablaDispositivos();
+    actualizarEstadisticas();
+});
+
+socket.on('device_connected', (data) => {
+    if (state.dispositivos[data.device_id]) {
+        state.dispositivos[data.device_id].conectado = true;
+        state.dispositivos[data.device_id].estado    = 'online';
+        actualizarTablaDispositivos();
+        actualizarEstadisticas();
+    }
+});
+
+socket.on('device_renamed', (data) => {
+    if (state.dispositivos[data.device_id]) {
+        state.dispositivos[data.device_id].nombre = data.nombre;
+        const input = document.querySelector(`input[data-device-id="${data.device_id}"]`);
+        if (input) input.value = data.nombre;
+    }
 });
 
 socket.on('respuesta_recibida', (data) => {
@@ -75,11 +126,13 @@ socket.on('config_cargada', (data) => {
         data.alumnos.forEach(alumno => {
             if (alumno.id) {
                 nuevosDispositivos[alumno.id] = {
-                    id: alumno.id,
-                    nombre: alumno.nombre,
-                    grupo: alumno.grupo || '',
-                    role: alumno.role   || '',
-                    estado: alumno.estado || 'offline'
+                    device_id: alumno.id,
+                    nombre:    alumno.nombre,
+                    grp:       alumno.grp  || '',
+                    rol:       alumno.rol  || '',
+                    actividad: alumno.actividad || '',
+                    estado:    alumno.estado || 'registrado',
+                    conectado: false
                 };
             }
         });
@@ -161,22 +214,29 @@ function actualizarTablaDispositivos() {
         inputNombre.value       = info.nombre || '';
         inputNombre.placeholder = 'Nombre del alumno';
         inputNombre.dataset.deviceId = device_id;
+        inputNombre.addEventListener('input', (e) => {
+            state.dispositivos[device_id].nombre = e.target.value.trim();
+        });
         inputNombre.addEventListener('change', (e) => {
             const nuevoNombre = e.target.value.trim();
             if (nuevoNombre) {
                 state.dispositivos[device_id].nombre = nuevoNombre;
-                socket.emit('actualizar_nombre', { device_id, nombre: nuevoNombre });
+                fetch(`${BASE}/api/renombrar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id, nombre: nuevoNombre })
+                });
             }
         });
         tdNombre.appendChild(inputNombre);
 
         const tdGrupo = document.createElement('td');
         tdGrupo.className = 'text-center';
-        tdGrupo.innerHTML = `<span class="badge bg-secondary">${info.grupo || '?'}</span>`;
+        tdGrupo.innerHTML = `<span class="badge bg-secondary">${info.grp ?? '?'}</span>`;
 
         const tdRole = document.createElement('td');
         tdRole.className = 'text-center';
-        tdRole.innerHTML = `<span class="badge bg-info">${info.role || '?'}</span>`;
+        tdRole.innerHTML = `<span class="badge bg-info">${info.rol ?? '?'}</span>`;
 
         const tdEstado = document.createElement('td');
         const estado   = info.estado || 'offline';
@@ -199,7 +259,7 @@ function actualizarTablaDispositivos() {
 
 function actualizarEstadisticas() {
     const total     = Object.keys(state.dispositivos).length;
-    const conectados = Object.values(state.dispositivos).filter(d => d.estado === 'online').length;
+    const conectados = Object.values(state.dispositivos).filter(d => d.conectado || d.estado === 'online').length;
     document.getElementById('stats-text').textContent = `Total: ${total} alumnos / ${conectados} conectados`;
 }
 
@@ -215,8 +275,8 @@ function mostrarPanelPregunta(pregunta) {
         li.className     = 'list-group-item d-flex justify-content-between align-items-center';
         li.id            = `respuesta-${device_id}`;
         const nombre     = info.nombre || device_id.substring(0, 8);
-        const grupo      = info.grupo  || '?';
-        const role       = info.role   || '?';
+        const grupo      = info.grp ?? '?';
+        const role       = info.rol ?? '?';
         li.innerHTML     = `<span>${nombre} <small class="text-muted">[G${grupo}:${role}]</small></span>
                             <span class="badge bg-secondary">Esperando...</span>`;
         lista.appendChild(li);
@@ -269,7 +329,7 @@ document.getElementById('guardar-todo-btn').addEventListener('click', async () =
                 url, pin, timeout,
                 nombre_archivo: nombreArchivo,
                 alumnos: Object.entries(state.dispositivos).map(([id, info]) => ({
-                    id, nombre: info.nombre || '', grupo: info.grupo || '', role: info.role || ''
+                    id, nombre: info.nombre || '', grupo: info.grp || '', role: info.rol || ''
                 }))
             })
         });

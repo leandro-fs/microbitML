@@ -9,7 +9,7 @@ from core import config
 
 _puerto_serial = None
 _puerto_lock   = Lock()
-_callback      = None  # funcion(dict) que llama la app activa
+_callback      = None
 
 def registrar_callback(fn):
     global _callback
@@ -55,7 +55,8 @@ def enviar(data):
         return False
     try:
         with _puerto_lock:
-            _puerto_serial.write((json.dumps(data) + '\n').encode('utf-8'))
+            # separators=(',',':') elimina espacios — critico para el parser del concentrador
+            _puerto_serial.write((json.dumps(data, separators=(',', ':')) + '\n').encode('utf-8'))
             _puerto_serial.flush()
         return True
     except Exception as e:
@@ -75,7 +76,6 @@ def leer():
     return None
 
 def loop_lectura():
-    # Corre en thread, despacha mensajes al callback registrado
     print("[Serial] Loop de lectura iniciado")
     while esta_conectado():
         try:

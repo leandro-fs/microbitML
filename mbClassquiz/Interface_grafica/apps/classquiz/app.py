@@ -141,6 +141,24 @@ class ClassquizApp(BaseApp):
 
         @bp.route('/api/conectar', methods=['POST'])
         def conectar():
+            data    = request.get_json(silent=True) or {}
+            url     = data.get('url', '').strip()
+            pin     = data.get('pin', '').strip()
+            timeout = data.get('timeout')
+            if url:
+                self.estado['url'] = url
+            if pin:
+                self.estado['pin'] = pin
+            if timeout is not None:
+                try:
+                    self.estado['timeout'] = int(timeout)
+                except ValueError:
+                    pass
+            with self.lock:
+                num = len(self.estado['dispositivos'])
+            if num == 0:
+                return jsonify({'error': 'No hay dispositivos. Ejecuta descubrimiento primero.'}), 400
+            print(f"[ClassQuiz] Conectando → url={self.estado['url']} pin={self.estado['pin']} dispositivos={num}")
             self._conectar_classquiz()
             return jsonify({'status': 'ok'})
 
@@ -153,6 +171,20 @@ class ClassquizApp(BaseApp):
         def guardar_alumnos():
             data = request.json
             self._guardar_alumnos(data.get('alumnos', []))
+            return jsonify({'status': 'ok'})
+
+        @bp.route('/api/renombrar', methods=['POST'])
+        def renombrar():
+            data      = request.json
+            device_id = data.get('device_id')
+            nombre    = data.get('nombre', '').strip()
+            if not device_id or not nombre:
+                return jsonify({'error': 'device_id y nombre requeridos'}), 400
+            with self.lock:
+                if device_id not in self.estado['dispositivos']:
+                    return jsonify({'error': 'Dispositivo no encontrado'}), 404
+                self.estado['dispositivos'][device_id]['nombre'] = nombre
+            print(f"[ClassQuiz] Renombrar {device_id[:8]} → '{nombre}'")
             return jsonify({'status': 'ok'})
 
         return bp

@@ -11,7 +11,7 @@ class Concentrador:
         uart.init(baudrate=115200)
 
     def enviar_usb(self, msg):
-        uart.write(msg + "\n")
+        print(msg)
 
     def radio_a_json(self, msg):
         # Serializa campos del Message a JSON minimo sin librerias
@@ -86,14 +86,16 @@ class Concentrador:
         if valores_str:
             payload += ":" + valores_str
 
-        print("TX:{}".format(payload))  # debug temporal
         self.radio.send(payload, CMD=False)
 
     def manejar_radio(self):
         msg = self.radio.receive(full=True)
         if not msg.valid or not msg.name:
             return
-        self.enviar_usb(self.radio_a_json(msg))
+        try:
+            self.enviar_usb(self.radio_a_json(msg))
+        except Exception as e:
+            self.enviar_usb('{{"error":"{}"}}'.format(str(e)))
 
     def manejar_usb(self):
         if uart.any():

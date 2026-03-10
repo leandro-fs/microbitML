@@ -86,7 +86,11 @@ class Radio:
         tipo = args[0]
         args = args[1:]
         sufijos = ('_DGR', '_GR')
-        sufijo = next((s for s in sufijos if tipo.endswith(s)), '')
+        sufijo = ''
+        for s in sufijos:  # la primitiva next() de microPython no acepta el parámetro default
+            if tipo.endswith(s):
+                sufijo = s
+                break # es ésto o un try-except(StopIteration), perdón Niklaus
         r.name = tipo[:-len(sufijo)] if sufijo else tipo
         expected = [filter] if isinstance(filter, str) else filter
         if expected and r.name not in expected:

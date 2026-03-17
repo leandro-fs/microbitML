@@ -251,6 +251,7 @@ function cfgForSize(size){
   if(size === 4) return { size, boxRows:2, boxCols:2 };
   if(size === 6) return { size, boxRows:2, boxCols:3 };
   if(size === 9) return { size, boxRows:3, boxCols:3 };
+  
   throw new Error("size no soportado");
 }
 

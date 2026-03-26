@@ -515,3 +515,17 @@ window.addEventListener('load', async () => {
         console.error('Error cargando config inicial:', error);
     }
 });
+// ============================================================================
+// URL OFICIAL CLASSQUIZ
+// ============================================================================
+
+function toggleUrlOficial(checkbox) {
+    const urlInput = document.getElementById('url-input');
+    if (checkbox.checked) {
+        urlInput.value    = 'https://classquiz.de';
+        urlInput.disabled = true;
+    } else {
+        urlInput.disabled = false;
+        urlInput.value    = 'http://localhost:8000';
+    }
+}

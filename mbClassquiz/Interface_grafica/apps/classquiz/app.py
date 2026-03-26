@@ -199,6 +199,8 @@ class ClassquizApp(BaseApp):
 
     def on_stop(self):
         self.sm.desconectar_todos(self.estado)
+        with self.lock:
+            self.estado['dispositivos'].clear()   # ← agregar esto
         print("[ClassQuiz] Detenido")
 
     def on_message(self, msg: dict):

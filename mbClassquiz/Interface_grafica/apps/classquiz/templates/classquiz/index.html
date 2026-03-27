@@ -54,6 +54,13 @@
                         
                         <div class="mb-3">
                             <label for="url-input" class="form-label">URL de ClassQuiz:</label>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="usar-classquiz-oficial"
+                                       onchange="toggleUrlOficial(this)">
+                                <label class="form-check-label" for="usar-classquiz-oficial">
+                                    Usar classquiz.de (sitio oficial)
+                                </label>
+                            </div>
                             <input type="text" class="form-control" id="url-input" 
                                    value="http://localhost:8000"
                                    placeholder="http://localhost:8000">

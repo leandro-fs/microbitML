@@ -6,7 +6,7 @@ class Ventana:
     def __init__(self, root, apps: list):
         self.root = root
         self.root.title("Microbit Proxy")
-        self.root.geometry("420x340")
+        self.root.geometry("420x360")
         self.root.resizable(False, False)
 
         self.puerto_seleccionado = tk.StringVar()
@@ -34,11 +34,14 @@ class Ventana:
         btn_usb = ttk.Frame(usb_frame)
         btn_usb.grid(row=1, column=0, columnspan=2, pady=(8, 0))
 
-        self.btn_detectar = ttk.Button(btn_usb, text="🔍 Detectar")
+        self.btn_detectar    = ttk.Button(btn_usb, text="🔍 Detectar")
         self.btn_detectar.pack(side=tk.LEFT, padx=4)
 
-        self.btn_conectar = ttk.Button(btn_usb, text="🔌 Conectar")
+        self.btn_conectar    = ttk.Button(btn_usb, text="🔌 Conectar")
         self.btn_conectar.pack(side=tk.LEFT, padx=4)
+
+        self.btn_desconectar = ttk.Button(btn_usb, text="⏏ Desconectar", state=tk.DISABLED)
+        self.btn_desconectar.pack(side=tk.LEFT, padx=4)
 
         # --- Estado ---
         estado_frame = ttk.Frame(main)
@@ -63,9 +66,20 @@ class Ventana:
         if conectado:
             self.estado_var.set(f"🟢 {puerto}")
             self.estado_label.config(fg="green")
+            self.btn_conectar.config(state=tk.DISABLED)
+            self.btn_desconectar.config(state=tk.NORMAL)
         else:
             self.estado_var.set("🔴 Desconectado")
             self.estado_label.config(fg="red")
+            self.btn_conectar.config(state=tk.NORMAL)
+            self.btn_desconectar.config(state=tk.DISABLED)
+
+    def set_reconectando(self):
+        """Muestra estado intermedio durante reintentos automáticos."""
+        self.estado_var.set("🟡 Reconectando...")
+        self.estado_label.config(fg="orange")
+        self.btn_conectar.config(state=tk.DISABLED)
+        self.btn_desconectar.config(state=tk.NORMAL)
 
     def set_puertos(self, puertos: list):
         self.puerto_combo['values'] = puertos

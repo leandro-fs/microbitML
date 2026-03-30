@@ -65,7 +65,7 @@ class Radio:
         if not raw:
             return None
         msg_str = str(raw)
-        print("RAW:{}".format(msg_str))
+        #print("RAW:{}".format(msg_str))
         tipo = msg_str.split(':')[0] if ':' in msg_str else msg_str
         return {'t': tipo, 'd': msg_str}
 
@@ -82,7 +82,8 @@ class Radio:
             return r
         r.act = all_parts
         if r.act != self.activity:
-            return r
+            if not (str(self.group) == '0' and str(self.role) == 'A'):
+                return r
         tipo = args[0]
         args = args[1:]
         sufijos = ('_DGR', '_GR')
@@ -183,7 +184,7 @@ class ConfigManager:
                                 self.config[k] = v
             return True
         except Exception as e:
-            print("CFG:Error:{}".format(str(e)))
+            #print("CFG:Error:{}".format(str(e)))
             return False
 
     # Guarda config en archivo

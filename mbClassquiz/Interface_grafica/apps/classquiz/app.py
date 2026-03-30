@@ -15,6 +15,8 @@ DEFAULT_TIMEOUT = 0
 CONFIG_FILE     = 'data/classquiz_config.csv'
 ALUMNOS_FILE    = 'data/alumnos.csv'
 
+ACTIVITY = 'cqz'
+
 class ClassquizApp(BaseApp):
     id    = "classquiz"
     label = "🌐 ClassQuiz"
@@ -200,7 +202,7 @@ class ClassquizApp(BaseApp):
     def on_stop(self):
         self.sm.desconectar_todos(self.estado)
         with self.lock:
-            self.estado['dispositivos'].clear()   # ← agregar esto
+            self.estado['dispositivos'].clear()
         print("[ClassQuiz] Detenido")
 
     def on_message(self, msg: dict):
@@ -232,7 +234,8 @@ class ClassquizApp(BaseApp):
             self.estado['dispositivos'].clear()
         socketio.emit('log', {'nivel': 'INFO', 'msg': 'Descubrimiento iniciado',
                               'timestamp': utils.timestamp()})
-        serial_manager.enviar({'name': 'REPORT', 'grp': 0, 'rol': 'est', 'valores': []})
+        serial_manager.enviar({'name': 'REPORT', 'act': ACTIVITY,
+                               'grp': 0, 'rol': 'est', 'valores': []})
 
         def esperar_ids():
             time.sleep(10)
@@ -262,7 +265,7 @@ class ClassquizApp(BaseApp):
                 'cliente': None, 'conectado': False
             }
 
-        serial_manager.enviar({'name': 'ACK', 'devID': device_id,
+        serial_manager.enviar({'name': 'ACK', 'act': ACTIVITY, 'devID': device_id,
                                 'grp': grp, 'rol': rol, 'valores': []})
         socketio.emit('new_device', {'device_id': device_id, 'grp': grp, 'rol': rol,
                                      'timestamp': utils.timestamp()})
@@ -297,14 +300,14 @@ class ClassquizApp(BaseApp):
             estado_reg = 'OK' if match['device_id'] == device_id else 'CONFLICT'
         else:
             estado_reg = 'NO'
-        serial_manager.enviar({'name': 'REG_STATUS', 'devID': device_id,
+        serial_manager.enviar({'name': 'REG_STATUS', 'act': ACTIVITY, 'devID': device_id,
                                 'grp': grp, 'rol': rol, 'valores': [estado_reg]})
 
     def _verificar_estado(self):
         with self.lock:
             dispositivos = list(self.estado['dispositivos'].items())
         for device_id, info in dispositivos:
-            serial_manager.enviar({'name': 'PING', 'devID': device_id,
+            serial_manager.enviar({'name': 'PING', 'act': ACTIVITY, 'devID': device_id,
                                    'grp': info['grp'], 'rol': info['rol'], 'valores': []})
 
     def _conectar_classquiz(self):

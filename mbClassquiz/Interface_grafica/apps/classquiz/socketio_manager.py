@@ -3,6 +3,8 @@ import socketio as sio_client
 import time
 from threading import Thread, Event
 
+ACTIVITY = 'cqz'
+
 _pregunta_actual   = None
 _opciones_actuales = []
 
@@ -64,6 +66,7 @@ def conectar_dispositivo(device_id, info, url, pin, estado):
 
         serial_manager.enviar({
             'name': 'QPARAMS',
+            'act': ACTIVITY,
             'grp': 0,
             'rol': 'est',
             'valores': [tipo, str(num_opciones)]
@@ -121,8 +124,8 @@ def _hacer_polling(estado):
     from core import serial_manager, utils
     from core.server import socketio
 
-    TIMEOUT_RESPUESTA = 1.5   # segundos de espera por respuesta
-    MAX_INTENTOS      = 2
+    TIMEOUT_RESPUESTA = 0.5   # segundos de espera por respuesta
+    MAX_INTENTOS      = 1
 
     print("[Votacion] Iniciando polling...")
     socketio.emit('log', {'nivel': 'INFO', 'msg': 'Polling iniciado',
@@ -142,7 +145,8 @@ def _hacer_polling(estado):
         respondio = False
         for intento in range(1, MAX_INTENTOS + 1):
             evento.clear()
-            serial_manager.enviar({'name': 'POLL', 'grp': grp, 'rol': rol, 'valores': []})
+            serial_manager.enviar({'name': 'POLL', 'act': ACTIVITY,
+                                   'grp': grp, 'rol': rol, 'valores': []})
             print(f"[Votacion] POLL → {nombre} G{grp}:{rol} (intento {intento})")
 
             if evento.wait(timeout=TIMEOUT_RESPUESTA):

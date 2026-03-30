@@ -1,0 +1,69 @@
+site_name: microbitML
+site_description: Framework de comunicación radio y persistencia para BBC micro:bit con MicroPython
+site_author: Fundación Sadosky - CDIA
+
+repo_url: https://github.com/leandro-fs/microbitML
+repo_name: leandro-fs/microbitML
+
+theme:
+  name: material
+  language: es
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Modo oscuro
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Modo claro
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Inicio: README.md
+  - Framework:
+    - Guía de uso de microbitml: framework/guia_microbitml.md
+  - Actividades:
+    - mbClassquiz:
+      - Descripción: actividades/mbclassquiz/README.md
+      - Documentación técnica: actividades/mbclassquiz/tecnica.md
+    - mbContador:
+      - Descripción: actividades/mbcontador/README.md
+    - mbPerceptron:
+      - Descripción: actividades/mbperceptron/README.md
+    - mbSnake:
+      - Descripción: actividades/mbsnake/README.md
+  - Guías:
+    - Instalación Microbit-ClassQuiz: guias/instalacion_microbit_classquiz.md
+    - Instalación ClassQuiz (servidor): guias/instalacion_classquiz.md
+    - Gmail SMTP: guias/smtp_gmail.md
+    - Configuración de roles y grupos: guias/configuracion.md
+    - Carga de firmware: guias/carga_firmware.md
+
+plugins:
+  - search:
+      lang: es

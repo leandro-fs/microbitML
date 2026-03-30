@@ -13,7 +13,7 @@ class ClassQuiz:
         )
         self.config.load()
 
-        self.radio = Radio(activity=ACTIVITY, channel=7)
+        self.radio = Radio(activity=ACTIVITY, channel=0)
         self.radio.configure(group=self.config.get('grupo'), role=self.config.get('role'))
 
         self.tipo_pregunta     = None

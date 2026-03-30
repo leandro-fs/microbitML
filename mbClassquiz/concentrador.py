@@ -2,8 +2,8 @@
 from microbit import *
 from microbitml import Radio
 
-ACTIVITY = "cqz"
-CHANNEL  = 7
+ACTIVITY = "con"
+CHANNEL  = 0
 
 class Concentrador:
     def __init__(self):
@@ -22,12 +22,13 @@ class Concentrador:
         else:
             valores_str = "[]"
 
+        act_str    = ',"act":"{}"'.format(msg.act) if msg.act else ""
         devid_str  = ',"devID":"{}"'.format(msg.devID) if msg.devID else ""
         grp_str    = ',"grp":{}'.format(msg.grp)       if msg.grp is not None else ""
         rol_str    = ',"rol":"{}"'.format(msg.rol)     if msg.rol else ""
 
-        return '{{"name":"{}"{}{}{}, "valores":{}}}'.format(
-            msg.name, devid_str, grp_str, rol_str, valores_str
+        return '{{"name":"{}"{}{}{}{}, "valores":{}}}'.format(
+            msg.name, act_str, devid_str, grp_str, rol_str, valores_str
         )
 
     def json_a_radio(self, linea):
@@ -52,6 +53,7 @@ class Concentrador:
                 return texto[inicio:fin].strip()
 
         name   = extraer("name",   linea)
+        act    = extraer("act",    linea)
         devid  = extraer("devID",  linea)
         grp    = extraer("grp",    linea)
         rol    = extraer("rol",    linea)
@@ -69,6 +71,7 @@ class Concentrador:
 
         # Sanitizar: quitar comillas residuales si el parser falla
         name  = name.strip('"')  if name  else name
+        act   = act.strip('"')   if act   else act
         devid = devid.strip('"') if devid else devid
         rol   = rol.strip('"')   if rol   else rol
 
@@ -82,7 +85,9 @@ class Concentrador:
         else:
             base = name
 
-        payload = ACTIVITY + ":" + base
+        # Usa la actividad que envio la PC, si no viene usa la propia
+        prefijo = act if act else ACTIVITY
+        payload = prefijo + ":" + base
         if valores_str:
             payload += ":" + valores_str
 
@@ -104,14 +109,11 @@ class Concentrador:
                 if linea:
                     linea = linea.decode('utf-8').strip()
                     if linea:
-                        # Botones fisicos notificados por la PC como convencion
-                        # o cualquier JSON con name para reenviar por radio
                         self.json_a_radio(linea)
             except:
                 pass
 
     def manejar_botones(self):
-        # Los botones solo notifican a la PC, la logica esta en Python
         if button_a.was_pressed():
             self.enviar_usb('{"event":"button_a"}')
         if button_b.was_pressed():

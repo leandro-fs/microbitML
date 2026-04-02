@@ -6,6 +6,10 @@ Los micro:bits se comunican por radio y se agrupan en equipos. Dentro de cada eq
 
 microbitML es completamente compatible con [micro:bit Classroom](https://classroom.microbit.org/), la herramienta oficial de gestión de clase para micro:bits.
 
+
+El framework fue diseñado para que el docente que crea o aplica una actividad, se concentre en la **Zona de Desarrollo Próximo** (ZDP) de Vygotsky como eje pedagógico: ningún dispositivo puede completar una actividad en soledad —el resultado emerge de la interacción entre pares—, lo que convierte la colaboración en una condición técnica, con implicancias didácticas. El docente, con visibilidad en tiempo real del estado de cada grupo desde la interfaz, puede intervenir selectivamente como *par más capaz* justo donde cada equipo lo necesita. Desde la perspectiva de Erikson, las actividades están calibradas para la transición entre la etapa de *Industria* (consolidar competencia, ~10–12 años) y la de *Identidad* (~12–18 años): cada estudiante asume un rol concreto y diferenciado dentro del grupo, lo que genera sentido de competencia individual y pertenencia colectiva - condiciones que propician el aprendizaje significativo en esas edades.
+
+
 ---
 
 ## Requisitos

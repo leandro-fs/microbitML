@@ -1,9 +1,9 @@
 ---
-title: mbNombreActividad
-description: Breve descripción de una línea
+title: mbContador
+description: Contador distribuido en base N con micro:bits — práctica de sistemas de numeración
 ---
 
-# mbNombreActividad — Título Descriptivo
+# mbContador — Contador Distribuido en Base N
 
 Actividad educativa para BBC micro:bit basada en la biblioteca [microbitML](https://github.com/leandro-fs/microbitML).
 
@@ -11,20 +11,35 @@ Actividad educativa para BBC micro:bit basada en la biblioteca [microbitML](http
 
 ## ¿Qué práctica aplica esta actividad?
 
-(Describir qué tema o concepto se trabaja con esta actividad)
+Sistemas de numeración. Varios micro:bits trabajan **en conjunto** como un único contador: cada dispositivo muestra un dígito del número total y se comunican entre sí por radio para propagar el "acarreo" cuando un dígito llega al límite de la base.
+
+La base del conteo es configurable. Por defecto es **base 5** con **3 dígitos** distribuidos en 3 micro:bits.
+
+### ¿Qué es contar en base N?
+
+En la vida cotidiana contamos en base 10: cuando un dígito supera el 9, vuelve al 0 y el de la izquierda sube 1. En base 5, lo mismo ocurre al llegar al 5; en base 2 (binario), al llegar al 2.
+
+| Cantidad | Base 4 | Base 5 | Hexadecimal | Binario |
+|----------|--------|--------|-------------|---------|
+| 0 | 0 | 0 | 0x0 | 0b0 |
+| 4 | 10 | 4 | 0x4 | 0b100 |
+| 5 | 11 | 10 | 0x5 | 0b101 |
+| 15 | 33 | 30 | 0xF | 0b1111 |
 
 ---
 
 ## ¿Cuántos micro:bits se necesitan?
 
-(Cantidad y qué rol cumple cada uno)
+No hay una cantidad fija. Se declara con el parámetro `numberLength` en `main.py` (por defecto, **3**). Cada uno asume un rol:
 
-| Rol | Función |
-|-----|---------|
-| A   |         |
-| B   |         |
+| Rol | Dígito que representa |
+|-----|-----------------------|
+| A | Unidades (el menos significativo) |
+| B | Siguiente posición |
+| C | Siguiente posición |
+| D | … y así sucesivamente |
 
-Todos los micro:bits ejecutan el mismo programa (`main.py`). Lo único que los diferencia es el rol configurado en cada uno.
+Todos los micro:bits **ejecutan el mismo programa** (`main.py`). Lo único que los diferencia es el rol configurado en cada uno.
 
 ---
 
@@ -32,51 +47,57 @@ Todos los micro:bits ejecutan el mismo programa (`main.py`). Lo único que los d
 
 ### 1. Cargar el programa
 
-Podés probar la actividad ya compilada cargando el archivo `mbNombre.hex` en varias micro:bit o el editor oficial: [python.microbit.org](https://python.microbit.org). El **mismo programa** corre en todos los micro:bits del aula (los roles y grupos se configuran en tiempo de ejecución).
-Para editar, cargá el archivo `main.py` junto con `microbitml.py` usando el editor oficial: [python.microbit.org](https://python.microbit.org). El código no es compatible con MakeCode.
+Cargar `mbContador.hex` (drag & drop) o cargar `main.py` junto con `microbitml.py` usando el [editor oficial](https://python.microbit.org/v/3). El código no es compatible con MakeCode.
 
 ### 2. Configurar rol y grupo en cada micro:bit
 
-Cada micro:bit necesita saber qué rol tiene y a qué grupo pertenece (para no mezclarse con otras actividades en el aula).
-Eso se configura según la documentación de la biblioteca `microbitML`: **Para entrar al modo configuración:** mantené el Pin1 conectado a GND con un cable y apretá los botones:
+**Para entrar al modo configuración:** mantener el Pin1 conectado a GND con un cable y presionar los botones:
 
-| Acción                      | Efecto                                        |
-|-----------------------------|-----------------------------------------------|
-| Pin1 + Botón A              | Cambia al siguiente rol (A → B → C…)          |
-| Pin1 + Botón B              | Cambia al siguiente grupo (1 → 2…9)           |
-| Tocar el logo (sin botones) | Muestra el rol y grupo actuales (A1, B1, etc) |
+| Acción | Efecto |
+|--------|--------|
+| Pin1 + Botón A | Cambia al siguiente rol (A → B → C…) |
+| Pin1 + Botón B | Cambia al siguiente grupo (1 → 2 … 9) |
+| Tocar el logo (sin botones) | Muestra el rol y grupo actuales (ej. A1, B3) |
 
-`microbitML` **guarda automáticamente** la configuración y la recuerda aunque se apague la MB.
+`microbitML` guarda automáticamente la configuración. Evitar el grupo 0.
 
-### 3. Operar la actividad
+### 3. Operar el contador
 
-(Describir cómo se usa: qué hacen los botones, qué se ve en pantalla, cómo interactúan los micro:bits)
+- **Solo el micro:bit con rol A** responde a los botones.
+- **Botón A** o **Botón B** incrementa el contador en 1.
+- Cuando el dígito llega a la base configurada, vuelve a 0 y envía un mensaje de radio al rol siguiente para que sume 1 (acarreo).
+- Cada micro:bit muestra su dígito actual en todo momento.
+
+!!! tip
+    Para leer el número completo, mirar las pantallas de derecha a izquierda: **A** es el dígito menos significativo, **B** el siguiente, etc.
 
 ---
 
 ## Parámetros configurables en el código
 
-(Si aplica, listar las variables que se pueden modificar al principio de `main.py`)
+Al principio de `main.py`:
 
 ```python
-# ejemplo:
-# variable = valor   # Descripción
+base = 5          # Cada dígito cuenta de 0 a (base-1)
+numberLength = 3  # Cantidad de micro:bits / dígitos del contador
 ```
+
+Si se cambia `base = 2`, el contador será binario. Si se cambia `numberLength = 4`, se necesitan 4 micro:bits con roles A, B, C y D.
 
 ---
 
 ## Estructura de archivos
 
 ```
-mbNombreActividad/
-├── main.py              ← Programa principal
-├── mbNombre.hex         ← Firmware precompilado
+mbContador/
+├── main.py          ← Programa principal
+├── mbContador.hex   ← Firmware precompilado
 └── README.md
 
-microbitml.py            ← Biblioteca compartida (va junto con main.py al micro:bit)
+microbitml.py        ← Biblioteca compartida (cargar junto con main.py)
 ```
-**Ambos archivos** deben cargarse en el [editor oficial de micro:bit](https://python.microbit.org/v/3/project).
 
 ---
-Licencia GPLv3
-(c) 2026 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+
+Licencia GPLv3  
+(C) 2026 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

@@ -1,30 +1,30 @@
 ---
-title: mbNombreActividad
-description: Breve descripción de una línea
+title: mbSnake
+description: Juego de la viborita en la matriz LED 5×5 del micro:bit
 ---
 
-# mbNombreActividad — Título Descriptivo
+# mbSnake — Juego colaborativo
 
-Actividad educativa para BBC micro:bit basada en la biblioteca [microbitML](https://github.com/leandro-fs/microbitML).
+Actividad para BBC micro:bit basada en la biblioteca [microbitML](https://github.com/leandro-fs/microbitML).
+
+Escrita originalmente en Python por el estudiante **Tomate Ruso** (13ra división), durante el [curso de Robótica](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica). Ejemplo de actividad donde el framework conecta dos micro:bits en modo adversario.
 
 ---
 
 ## ¿Qué práctica aplica esta actividad?
 
-(Describir qué tema o concepto se trabaja con esta actividad)
+Programación en Python con micro:bit, pensamiento computacional y lógica de juego. Clásico juego de la viborita (o los "lightcycles" de [TRON](https://es.wikipedia.org/wiki/Tron)) en la matriz LED 5×5.
 
 ---
 
 ## ¿Cuántos micro:bits se necesitan?
 
-(Cantidad y qué rol cumple cada uno)
+**2 por partida** — uno por jugador.
 
 | Rol | Función |
 |-----|---------|
-| A   |         |
-| B   |         |
-
-Todos los micro:bits ejecutan el mismo programa (`main.py`). Lo único que los diferencia es el rol configurado en cada uno.
+| A | Jugador 1 |
+| B | Jugador 2 |
 
 ---
 
@@ -32,51 +32,40 @@ Todos los micro:bits ejecutan el mismo programa (`main.py`). Lo único que los d
 
 ### 1. Cargar el programa
 
-Podés probar la actividad ya compilada cargando el archivo `mbNombre.hex` en varias micro:bit o el editor oficial: [python.microbit.org](https://python.microbit.org). El **mismo programa** corre en todos los micro:bits del aula (los roles y grupos se configuran en tiempo de ejecución).
-Para editar, cargá el archivo `main.py` junto con `microbitml.py` usando el editor oficial: [python.microbit.org](https://python.microbit.org). El código no es compatible con MakeCode.
+Copiar el código de `main.py` y cargarlo junto con `microbitml.py` en el [editor oficial](https://python.microbit.org/v/3). El código no es compatible con MakeCode.
 
-### 2. Configurar rol y grupo en cada micro:bit
+!!! note
+    La emulación del editor web hace tedioso jugar porque los botones son difíciles de presionar. Se recomienda usar hardware físico.
 
-Cada micro:bit necesita saber qué rol tiene y a qué grupo pertenece (para no mezclarse con otras actividades en el aula).
-Eso se configura según la documentación de la biblioteca `microbitML`: **Para entrar al modo configuración:** mantené el Pin1 conectado a GND con un cable y apretá los botones:
+### 2. Configurar rol y grupo
 
-| Acción                      | Efecto                                        |
-|-----------------------------|-----------------------------------------------|
-| Pin1 + Botón A              | Cambia al siguiente rol (A → B → C…)          |
-| Pin1 + Botón B              | Cambia al siguiente grupo (1 → 2…9)           |
-| Tocar el logo (sin botones) | Muestra el rol y grupo actuales (A1, B1, etc) |
+**Para entrar al modo configuración:** mantener el Pin1 conectado a GND con un cable y presionar los botones:
 
-`microbitML` **guarda automáticamente** la configuración y la recuerda aunque se apague la MB.
+| Acción | Efecto |
+|--------|--------|
+| Pin1 + Botón A | Cambia al siguiente rol (A → B) |
+| Pin1 + Botón B | Cambia al siguiente grupo (1 → 2 … 9) |
+| Tocar el logo (sin botones) | Muestra el rol y grupo actuales |
 
-### 3. Operar la actividad
+### 3. Jugar
 
-(Describir cómo se usa: qué hacen los botones, qué se ve en pantalla, cómo interactúan los micro:bits)
-
----
-
-## Parámetros configurables en el código
-
-(Si aplica, listar las variables que se pueden modificar al principio de `main.py`)
-
-```python
-# ejemplo:
-# variable = valor   # Descripción
-```
+Presionar los botones para controlar la dirección de la viborita. El objetivo es no chocar con los bordes ni con la propia cola.
 
 ---
 
 ## Estructura de archivos
 
 ```
-mbNombreActividad/
-├── main.py              ← Programa principal
-├── mbNombre.hex         ← Firmware precompilado
+mbSnake/
+├── main.py        ← Código fuente (MicroPython)
 └── README.md
 
-microbitml.py            ← Biblioteca compartida (va junto con main.py al micro:bit)
+microbitml.py      ← Biblioteca compartida (cargar junto con main.py)
 ```
-**Ambos archivos** deben cargarse en el [editor oficial de micro:bit](https://python.microbit.org/v/3/project).
 
 ---
-Licencia GPLv3
-(c) 2026 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+
+Licencia GPL v2  
+(C) Tomate Ruso  
+(C) [Robótica - AITEC - CNBA](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica)  
+(C) 2025 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

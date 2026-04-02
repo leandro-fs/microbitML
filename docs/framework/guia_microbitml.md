@@ -483,7 +483,7 @@ config.save()
 
 ### Modo configuración interactiva — config_rg()
 
-Permite que el alumno cambie grupo y rol usando botones físicos mientras mantiene pin1 tocado. Muy útil para configurar dispositivos sin conectar al PC.
+Permite que el estudiante cambie grupo y rol usando botones físicos mientras mantiene pin1 tocado. Muy útil para configurar dispositivos sin conectar al PC.
 
 ```python
 def mostrar():

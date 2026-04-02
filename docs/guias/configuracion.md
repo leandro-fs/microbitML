@@ -11,7 +11,7 @@ Cada micro:bit necesita saber qué **rol** tiene y a qué **grupo** pertenece. E
 
 ## Conceptos
 
-**Rol:** Identifica la función del micro:bit dentro de la actividad. Por ejemplo, en mbContador los roles `A`, `B`, `C` representan los dígitos del número. En mbClassquiz los roles identifican a cada alumno dentro de un grupo.
+**Rol:** Identifica la función del micro:bit dentro de la actividad. Por ejemplo, en mbContador los roles `A`, `B`, `C` representan los dígitos del número. En mbClassquiz los roles identifican a cada estudiante dentro de un grupo.
 
 **Grupo:** Identifica al equipo o mesa de trabajo. Los micro:bits del mismo grupo se comunican entre sí. El grupo `0` es broadcast (llega a todos).
 
@@ -60,7 +60,7 @@ Los roles dependen de la actividad cargada en el micro:bit:
 
 | Actividad | Roles disponibles | Descripción |
 |---|---|---|
-| mbClassquiz | A, B, C, D, E, Z | Alumnos (A-E) y concentrador (Z) |
+| mbClassquiz | A, B, C, D, E, Z | Estudiantes (A-E) y concentrador (Z) |
 | mbContador | A, B, C, ... | Cada rol es un dígito del contador |
 | mbPerceptron | Z, A, B | Z es el axón, A y B son entradas |
 | mbSnake | A, B | Jugadores |

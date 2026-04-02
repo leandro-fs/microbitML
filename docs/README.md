@@ -9,13 +9,15 @@ Framework para actividades educativas grupales con BBC micro:bit V2 y MicroPytho
 
 Los micro:bits se comunican por radio y se agrupan en equipos. Dentro de cada equipo, cada dispositivo asume un rol diferente. Todo el aula comparte el mismo canal de radio, permitiendo también un nodo docente/monitor.
 
+microbitML es completamente compatible con [micro:bit Classroom](https://classroom.microbit.org/), la herramienta oficial de gestión de clase para micro:bits.
+
 ---
 
 ## Actividades disponibles
 
 | Actividad | Descripción | micro:bits necesarios |
 |---|---|---|
-| [mbClassquiz](actividades/mbclassquiz/README.md) | Integración con la plataforma ClassQuiz para quizzes interactivos | 1 concentrador + N alumnos |
+| [mbClassquiz](actividades/mbclassquiz/README.md) | Integración con la plataforma ClassQuiz para quizzes interactivos | 1 concentrador + N estudiantes |
 | [mbContador](actividades/mbcontador/README.md) | Contador distribuido en base N — práctica de sistemas de numeración | 2 a 26 (uno por dígito) |
 | [mbPerceptron](actividades/mbperceptron/README.md) | Perceptrón distribuido — introducción a Machine Learning | 3 (roles A, B, Z) |
 | [mbSnake](actividades/mbsnake/README.md) | Juego de la viborita en la matriz de LEDs 5×5 | 2 |

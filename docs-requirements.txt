@@ -1,0 +1,10 @@
+properdocs
+properdocs[i18n]
+mkdocs-material
+mkdocstrings[python]
+mkdocs-gen-files
+mkdocs-literate-nav
+mkdocs-section-index
+mkdocs-obsidian-bridge
+mkdocs-autorefs
+pymdown-extensions

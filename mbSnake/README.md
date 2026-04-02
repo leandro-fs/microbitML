@@ -1,6 +1,6 @@
 # Snake
 
-por [Tomate Ruso](xxx@gmail), CNBA 2do 13  
+por [Tomate Ruso](xxx@gmail), 13ra división  
 
 
 
@@ -47,7 +47,7 @@ El autor original, Tomate Ruso, decidió publicar su trabajo como Software Libre
 
 # Licencia
 
-[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)  
+[GPL v3](https://www.gnu.org/licenses/gpl-3.0.html)  
 (C) Tomate Ruso  
 (C) [Robótica - AITEC - CNBA](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica)  
-(C) 2025 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+(C) 2025 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

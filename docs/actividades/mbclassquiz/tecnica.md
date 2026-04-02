@@ -18,12 +18,12 @@ INTERFAZ GRÁFICA (PC, Python/Flask)
     ↕ USB Serial (115200 baud)
 CONCENTRADOR (micro:bit V2)
     ↕ Radio 2.4GHz (canal 0)
-ALUMNOS (micro:bits V2, hasta ~30)
+ESTUDIANTES (micro:bits V2, hasta ~30)
 ```
 
 ---
 
-## Firmware alumno — classquiz.py
+## Firmware estudiante — classquiz.py
 
 Actividad: `cqz` | Canal: 0 | Roles: A, B, C, D, E, Z
 
@@ -31,14 +31,14 @@ Actividad: `cqz` | Canal: 0 | Roles: A, B, C, D, E, Z
 
 | Mensaje | Dirección | Descripción |
 |---|---|---|
-| `REPORT` | Concentrador → Alumnos | Solicita identificación |
-| `ID` | Alumno → Concentrador | Respuesta con device_id (incluye delay anti-colisión) |
-| `ACK` | Concentrador → Alumno | Confirmación de registro |
-| `CHECK_REG` | Alumno → Concentrador | Consulta si ya está registrado (al arrancar o reconectar) |
-| `REG_STATUS` | Concentrador → Alumno | Respuesta: OK, NO o CONFLICT |
-| `QPARAMS` | Concentrador → Alumnos | Tipo de pregunta y cantidad de opciones |
-| `POLL` | Concentrador → Alumno | Solicita respuesta de un alumno específico |
-| `ANSWER` | Alumno → Concentrador | Opciones seleccionadas (packed) |
+| `REPORT` | Concentrador → Estudiantes | Solicita identificación |
+| `ID` | Estudiante → Concentrador | Respuesta con device_id (incluye delay anti-colisión) |
+| `ACK` | Concentrador → Estudiante | Confirmación de registro |
+| `CHECK_REG` | Estudiante → Concentrador | Consulta si ya está registrado (al arrancar o reconectar) |
+| `REG_STATUS` | Concentrador → Estudiante | Respuesta: OK, NO o CONFLICT |
+| `QPARAMS` | Concentrador → Estudiantes | Tipo de pregunta y cantidad de opciones |
+| `POLL` | Concentrador → Estudiante | Solicita respuesta de un estudiante específico |
+| `ANSWER` | Estudiante → Concentrador | Opciones seleccionadas (packed) |
 | `PING` / `PONG` | Bidireccional | Verificación de conectividad |
 
 ### Delay de descubrimiento
@@ -139,10 +139,10 @@ En `app.py` y `socketio_manager.py` la actividad se define como constante `ACTIV
 
 1. ClassQuiz emite `set_question_number` vía Socket.IO
 2. La interfaz envía `QPARAMS` (con `act: cqz`) por serial al concentrador
-3. El concentrador hace broadcast radio a todos los alumnos con prefijo `cqz`
-4. Los alumnos seleccionan opciones con los botones
+3. El concentrador hace broadcast radio a todos los estudiantes con prefijo `cqz`
+4. Los estudiantes seleccionan opciones con los botones
 5. La interfaz inicia polling secuencial: `POLL` (con `act: cqz`) a cada device_id registrado
-6. Cada alumno responde `ANSWER` con sus opciones
+6. Cada estudiante responde `ANSWER` con sus opciones
 7. El concentrador reenvía por USB (JSON con `act` del mensaje original)
 8. La interfaz mapea device_id → username y envía a ClassQuiz vía Socket.IO
 

@@ -5,6 +5,9 @@ description: Breve descripción de una línea
 
 # mbNombreActividad — Título Descriptivo
 
+!!! note "Plantilla para nuevas actividades"
+    Reemplazar todos los valores entre paréntesis y los nombres `mbNombreActividad` / `mbNombre` antes de usar.
+
 Actividad educativa para BBC micro:bit basada en la biblioteca [microbitML](https://github.com/leandro-fs/microbitML).
 
 ---
@@ -79,4 +82,4 @@ microbitml.py            ← Biblioteca compartida (va junto con main.py al micr
 
 ---
 Licencia GPLv3
-(c) 2026 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+(C) 2026 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

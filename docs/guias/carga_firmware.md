@@ -68,7 +68,7 @@ Para cada actividad hay un archivo `.hex` listo para usar, que incluye tanto `mi
 
     | Actividad | Archivo |
     |---|---|
-    | mbClassquiz (alumno) | `classquiz.hex` |
+    | mbClassquiz (estudiante) | `classquiz.hex` |
     | mbClassquiz (concentrador) | `concentrador.hex` |
     | mbContador | `mbContador.hex` |
     | mbPerceptron | `perceptron.hex` |

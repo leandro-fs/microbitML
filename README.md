@@ -1,56 +1,151 @@
 # microbitML
 
+[Framework](https://es.wikipedia.org/wiki/Framework) educativo para actividades grupales con [BBC micro:bit](https://github.com/microbit-foundation/) y [MicroPython](https://python.microbit.org).
 
-Framework and proof of concept for Machine Learning practices (perceptrons, MLP and so on) using a swarm of version2 [BBC Micro:bit](https://python.microbit.org/)'s, for high-school formal Education.
+Los micro:bits se comunican por radio y se agrupan en equipos. Dentro de cada equipo, cada dispositivo asume un **rol** diferente. Todo el aula comparte el mismo canal de radio, lo que permite también un nodo docente (hub+gateway).
 
-Microbits communicate via bluetooth, but are grouped (in app layer) in teams. Within each team, each MB must  assume a different role.  The whole class uses the same channel, in order to accommodate a monitoring/teaching node.
+microbitML es completamente compatible con [micro:bit Classroom](https://classroom.microbit.org/), la herramienta oficial de gestión de clase para micro:bits.
+
+---
+
+## Requisitos
+
+- **Hardware:** 2 o más BBC micro:bit (V1 o V2)
+- **Firmware:** editor web [python.microbit.org](https://python.microbit.org) (para cargar o editar el código `.py`); o archivos `.hex` precompilados para carga directa sin instalar nada
+- **Aplicación de escritorio** (solo para mbClassquiz): Python 3.x — ver dependencias en `mbClassquiz/Interface_grafica/requirements.txt`
+
+---
+
+## Actividades
+
+Las actividades incluidas en este repositorio son **demostraciones de referencia**. Su propósito es doble: que los docentes las usen directamente en clase, y que sirvan como punto de partida —o material para diseccionar y discutir— al momento de diseñar actividades propias con el framework microbitML.
+
+---
+
+### mbClassquiz — Votaciones interactivas con ClassQuiz.de 
+
+→ [Documentación completa](docs/actividades/mbclassquiz/README.md)
+
+La actividad más completa del repertorio. Integra los micro:bits con [ClassQuiz](https://classquiz.de/), una plataforma de quizzes interactivos de código abierto.
+
+**Lo que la hace especial:**
+
+- El docente **crea cualquier quiz que desee** desde la interfaz web de ClassQuiz: preguntas de opción múltiple, verdadero/falso, respuesta abierta. **Sin programar nada**.
+- ClassQuiz puede instalarse localmente en la PC del docente o en la red del colegio: **los quizzes funcionan con o sin conexión a Internet**.
+- Los estudiantes votan con los micro:bits físicamente (botones A/B para navegar y seleccionar), y el docente ve los resultados en tiempo real en su navegador.
+- Un micro:bit "concentrador" conectado por USB a la PC del docente actúa como gateway: recibe las respuestas de todos los estudiantes por radio y las envía a la aplicación de escritorio.
+- Aunque se puede votar desde cualquier dispositivo compatible con ClassQuiz.de, esta actividad bien puede ayudar a bajar la cantidad de celulares en el aula, que están siendo prohibidos en todo el mundo. 
+
+**Montaje mínimo:** 1 micro:bit concentrador (PC del docente) + 1 micro:bit por estudiante (hasta ~30).
+
+![Práctica en clase](README.d/practica_241029.png)
+
+---
+
+### mbPerceptron — Inteligencia Artificial con micro:bits
+
+→ [Documentación completa](mbPerceptron/README.md)
+
+Tres micro:bits forman un **perceptrón distribuido**: varios actúan como entradas (dendritas, roles A, B, C, etc) y uno como salida (axón, rol Z). Sin decirles qué tienen entre manos, los estudiantes infieren por interacción directa, y debate, cuál es la operación matemática subyacente. Luego el docente introduce la jerga de Machine Learning (pesos, función de activación, clasificación, sesgo) sobre lo que los estudiantes ya descubrieron.
+
+Ésta actividad inspiró la creación del framework en 2024, y su nombre `microbitML` responde a que extiende la funcionalidad de BLE nativa, y se pensó originalmente para Machine Learning. Basado en el artículo del Prof. Fujio Yamamoto: [building a Microbit network emulating a MLP](https://sparse-dense.blogspot.com/2018/06/microbittwo-layer-perceptronxor.html). 山本さん、本当にありがとうございました！
 
 
-## Proof of concept
+---
+
+### mbContador — Sistemas de numeración distribuidos
+
+→ [Documentación completa](mbContador/README.md)
+
+Varios micro:bits trabajan en conjunto como un único contador en base N (configurable). Cada dispositivo muestra un dígito del número total y se comunican por radio para propagar el "acarreo". Todos ejecutan el mismo programa; lo único que los diferencia es el rol asignado.
+
+---
+
+### mbSnake — Juego colaborativo
+
+→ [Documentación completa](mbSnake/README.md)
+
+Clásico juego de la viborita en la matriz LED 5×5, escrito en Python para micro:bit por el estudiante Tomate Ruso (CNBA). Ejemplo de uso del framework con 2 dispositivos en modo adversario: la manzana cambia de lugar cuando el adversario sacude su micro:bit (como si sacudiera el manzano)
+
+---
+
+## API de microbitML
+
+`microbitml.py` es la biblioteca que gestiona las actividades, sumando a la comunicación nativa de las micro:bits, toda la funcionalidad de grupos, roles, etc. Provee dos clases:
+
+- **`Radio`** — Extensión de la biblioteca oficial [Radio](https://microbit.org/es-es/get-started/features/radio-and-pins/), que facilita el intercambio de mensajes estructurados, con filtrado automático por actividad y grupo. 
+- **`ConfigManager`** — persistencia de la configuración en memoria flash (sobrevive a reinicios)
+
+La documentación completa de la API, con ejemplos de uso, está disponible en el sitio Properdocs/MkDocs del proyecto
+
+Para generar el sitio localmente:
+
+```bash
+pip install -r docs-requirements.txt
+properdocs serve -f mkdocs.yml 
+```
+
+---
+
+## Contribuciones
+
+Las contribuciones son bienvenidas, diferenciadas por perfil:
+
+- **Docentes:** nuevas actividades de aula, mejoras a la documentación pedagógica, reportes de uso real en clase
+- **Desarrolladores:** nuevas actividades de firmware, mejoras al framework `microbitml.py`, mejoras a la aplicación de escritorio
+
+Al contribuir a este repositorio se asume aceptación de las licencias vigentes (ver sección Licencias). Para proyectos de mayor escala se evaluará implementar un [Developer Certificate of Origin (DCO)](https://developercertificate.org/).
+
+---
+
+## Créditos
 
 
-In the case of this proof of concept, a Perceptron is formed by a team of three MB. Two acting as inputs/dendrites and one as the output/axon. Not a multi-layer perceptron, all three Microbits compose one perceptron. These are the roles of each one:
+Colaboradores/as iniciales, por orden alfabético:
 
-- Role A: sends a count of 3 things, multiplied by 1, valid values: {0,1,2,3}.
-- Role B: sends a count of (other) 3 things, multiplied by 2, valid values: {0,2,4,6}
-- Role Z: Receives the data from A and B, adds them and applies a binary activation function that will be "True" iif the sum exceeds 6.
-
-
-![](README.d/neuronaMB.png)
-
-Count on input nodes are updated by pressing buttons A and B. Here's a detail on Role Z's output:
-
-![](README.d/z_binary_output.png)
+| Nombre                                                                                                           | Rol                           |
+|------------------------------------------------------------------------------------------------------------------|-------------------------------|
+| Alarcón Lasagno, Ramiro                                                                                          | Doc, SW                       |
+| Batlle, Leandro                                                                                                  | Doc, SW , idea original       |
+| Medel, Ricardo                                                                                                   | Licencias Doc, FLOSS, OSHW    |
+| Ruso, Tomate — CNBA 13ra                                                                                         | mbSnake (autor original)      |
+| Yamamoto, Fujio  | Inspiración para el framework |
 
 
-## Usage:  proof-of-concept 
+*¿Contribuiste al proyecto? Abrí un PR para agregar tu nombre y aportes.*
 
-1. Download the same .hex file to every Microbit in class (teaching node is not implemented yet)
-2. Separate the class in groups of three MB's. Maybe groups of six~ten students, sharing 3 MB, is fine.
-3. Each group must have all MB's configured accordingly to assigned group and role. To change those, keep pin one  connected to ground, and press buttons A and B. When done, disconnect pin 1, to restore normal button operation.
-   1. Button A cycles role. In the p-o-c, available roles are {A,B,Z}
-   2. Button B cycles group {0,1,..,9}
-      ![](README.d/config_role_group.png)      
-      
-1. At any time,  group and role, can be checked by touching the Micro:bit logo. Avoid group 0, since any node can fallback to that group if eventually restarted.
-2. Your class is set
-3. You can now conduct any teaching experience you want. For example:
-   1. Give the class some context on Microbits A and B being inputs for a perceptron, and vertical bar in Z is the boolean output (giving them a printed sheet with the neuron sketch above to place them, might help). When ready, a task for them would be to figure out the answer to questions like:
-	   1. Guess what TWO math operation drives vertical bar in Z? (answer: sums A and B, then compares to 6)
-	   2. What's the difference between A and B? ( A multiplies it's count by 1, B multiplies it's count by 2)
-   2. After all groups inferred the answer to your questions, just by discussing individual  interaction with their MB, you can discuss with them in Machine Learning jargon:
-      1. Microbits A,B and Z form a **perceptron**, the basic processing element in ML
-      2. A and B store different **weights**, that constitute a **ML Model**
-      3. Z sums and applies an **activation function**. It's output might be a final **classification** of the model. Or, if part of a different **architecture**, the output might  **feed forward**  yet another **layer** of perceptrons in an **MLP**. Z might apply a **bias**, with is also part of the *ML model* . 
-      4. *weights* of A and B are fixed here, but the "Learning" part of "Supervised ML" consists of adapting those *weights and bias*, by means of several thousands of cycles of exposure to  **tagged samples**, that form a **dataset**. Each cycle emprobes the model by applying small changes in *weights and bias*. That's called **training**. Training goes on, until some metric is considered satisfactory by the **data scientists** that designed the **ML pipeline**.
-      5. As part of the *ML pipeline* the *model* is **validated** against an all-new *dataset*. If that metrics holds the model is considered production-grade. Otherwise, more *training* is needed. The huge  amount the training data needed, is often the main weakness of *ML pipelines* and the resulting *Supervised Machine Learning models*
-      6. Conclusion: when consuming ML-equipped devices, ALWAYS beware that errors in classification will happen, specially if the underlying *model* is not *trained* for your particular application.
+Este proyecto utiliza la [BBC Micro:bit](https://www.microbit.org), desarrollada por la [Micro:bit Educational Foundation](https://github.com/microbit-foundation). La Micro:bit Foundation publica sus especificaciones de hardware, firmware y recursos educativos bajo licencias abiertas en [github.com/microbit-foundation](https://github.com/microbit-foundation).
 
 
-![](README.d/practica_241029.png)
-## Credits
 
-- heavily based on Prof Fujio Yamamoto's blog article on [building a Microbit network emulating a MLP](https://sparse-dense.blogspot.com/2018/06/microbittwo-layer-perceptronxor.html). Thanks a bunch, Mr Yamamoto!!
-- (C) 2024 - 2025 [Leandro Batlle](https://www.linkedin.com/in/lean-b/) - Área de Innovación Educativa Científico-Tecnológica - [Colegio Nacional de Bs As](https://www.cnba.uba.ar)
-- (C) 2025 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+---
 
+## Marcas registradas
+
+Los nombres de productos y marcas mencionados en este repositorio —incluyendo **BBC Micro:bit**, **MicroPython**, **MakeCode** y **ClassQuiz**— son propiedad de sus respectivos titulares y se utilizan únicamente con fines identificativos y descriptivos.
+
+---
+
+## Naturaleza del proyecto
+
+microbitML es un framework de software independiente que permite construir actividades educativas grupales con micro:bits. El proyecto provee código fuente original (firmware en MicroPython y aplicación de escritorio en Python) y documentación pedagógica.
+
+El proyecto no modifica ni redistribuye el firmware, el runtime de MicroPython, ni ningún software o diseño de hardware de los productos de terceros que integra.
+
+---
+
+## Garantías y responsabilidad
+
+Este proyecto se distribuye sin garantía de ningún tipo, expresa o implícita. El uso y la eventual modificación del software son responsabilidad exclusiva del usuario. Consultá las licencias citadas o incluidas en este repositorio para los términos completos.
+
+---
+
+## Licencias
+
+| Componente | Licencia |
+|------------|----------|
+| Código fuente (`.py`, `.js`, y demás archivos de software) | [GPLv3](LICENSE) |
+| Documentación (`docs/`, archivos `*.md`) | [CC BY-SA 4.0](LICENSE-docs) |
+
+- (C) 2024 Leandro Batlle
+- (C) 2025–2026 Fundación Sadosky

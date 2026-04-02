@@ -11,20 +11,20 @@ Actividad educativa para BBC micro:bit basada en la biblioteca [microbitML](http
 
 ## ¿Qué práctica aplica esta actividad?
 
-Participación en quizzes interactivos. Los alumnos usan micro:bits como dispositivos de votación físicos para responder preguntas creadas por el docente en la plataforma [ClassQuiz](https://classquiz.de/). El docente ve los resultados en tiempo real en su navegador.
+Participación en quizzes interactivos. Los estudiantes usan micro:bits como dispositivos de votación físicos para responder preguntas creadas por el docente en la plataforma [ClassQuiz](https://classquiz.de/). El docente ve los resultados en tiempo real en su navegador.
 
 ---
 
 ## ¿Cuántos micro:bits se necesitan?
 
-Se necesita **1 concentrador** (conectado por USB a la PC del docente) y **1 micro:bit por alumno** (hasta ~30).
+Se necesita **1 concentrador** (conectado por USB a la PC del docente) y **1 micro:bit por estudiante** (hasta ~30).
 
 | Rol | Función |
 |-----|---------|
-| A, B, C, D, E, Z | Dispositivo de alumno — navega y envía respuestas por radio |
+| A, B, C, D, E, Z | Dispositivo de estudiante — navega y envía respuestas por radio |
 
 
-El concentrador ejecuta un programa diferente (`concentrador.py`). Los alumnos ejecutan todos el mismo programa (`classquiz.py`).
+El concentrador ejecuta un programa diferente (`concentrador.py`). Los estudiantes ejecutan todos el mismo programa (`classquiz.py`).
 
 ---
 
@@ -32,7 +32,7 @@ El concentrador ejecuta un programa diferente (`concentrador.py`). Los alumnos e
 
 ### 1. Cargar el programa
 
-**Micro:bits de alumnos:** Cargar `classquiz.hex` (drag & drop) o cargar `classquiz.py` junto con `microbitml.py` usando el [editor oficial](https://python.microbit.org/v/3).
+**Micro:bits de estudiantes:** Cargar `classquiz.hex` (drag & drop) o cargar `classquiz.py` junto con `microbitml.py` usando el [editor oficial](https://python.microbit.org/v/3).
 
 **Micro:bit concentrador:** Cargar `concentrador.hex` o cargar `concentrador.py` junto con `microbitml.py`.
 
@@ -40,7 +40,7 @@ El código no es compatible con MakeCode.
 
 ### 2. Configurar rol y grupo en cada micro:bit
 
-Cada micro:bit de alumno necesita saber qué rol tiene y a qué grupo pertenece (para no mezclarse con otras actividades en el aula).
+Cada micro:bit de estudiante necesita saber qué rol tiene y a qué grupo pertenece (para no mezclarse con otras actividades en el aula).
 Eso se configura según la documentación de la biblioteca `microbitML`: **Para entrar al modo configuración:** mantené el Pin1 conectado a GND con un cable y apretá los botones:
 
 | Acción                      | Efecto                                        |
@@ -62,15 +62,15 @@ Para instrucciones detalladas ver la guía de [instalación de Microbit-ClassQui
 
 ### 4. Operar la actividad
 
-**Registro de alumnos:**
+**Registro de estudiantes:**
 
 - Al presionar Botón A en el concentrador (o desde la interfaz web), se inicia el descubrimiento
-- Los micro:bits de alumnos responden automáticamente con su ID
-- El alumno ve un ✓ en pantalla cuando queda registrado
+- Los micro:bits de estudiantes responden automáticamente con su ID
+- El estudiante ve un ✓ en pantalla cuando queda registrado
 
 **Durante una pregunta:**
 
-- La pantalla del alumno muestra la opción actual (A, B, C o D)
+- La pantalla del estudiante muestra la opción actual (A, B, C o D)
 - **Botón A:** Navegar a la siguiente opción
 - **Botón B:** Seleccionar/deseleccionar la opción actual
 - Un punto central brillante indica que la opción está seleccionada
@@ -79,7 +79,7 @@ Para instrucciones detalladas ver la guía de [instalación de Microbit-ClassQui
 **Envío de respuesta:**
 
 - La respuesta se envía automáticamente cuando el concentrador hace polling
-- El alumno ve una flecha ← confirmando el envío
+- El estudiante ve una flecha ← confirmando el envío
 
 ---
 
@@ -104,8 +104,8 @@ channel=0                                  # Canal de radio
 
 ```
 mbClassquiz/
-├── classquiz.py          ← Firmware alumno
-├── classquiz.hex         ← Firmware alumno precompilado
+├── classquiz.py          ← Firmware estudiante
+├── classquiz.hex         ← Firmware estudiante precompilado
 ├── concentrador.py       ← Firmware concentrador (gateway USB ↔ radio)
 ├── concentrador.hex      ← Firmware concentrador precompilado
 ├── Interface_grafica/    ← Programa PC (ver documentación técnica)
@@ -120,4 +120,4 @@ microbitml.py             ← Biblioteca compartida (va junto con el firmware al
 
 ---
 Licencia GPLv3
-(c) 2026 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+(C) 2026 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

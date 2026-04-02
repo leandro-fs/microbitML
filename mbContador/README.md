@@ -15,7 +15,7 @@ La base del conteo es configurable. Por defecto es **base 5** (dígitos del 0 al
 ### ¿Qué es contar en base N?
 
 En la vida cotidiana contamos en base 10: cuando un dígito supera el 9, vuelve al 0 y el de la izquierda sube 1. En base 5, lo mismo ocurre al llegar al 5. En base 4, al llegar al 4.    
-Ejemplos de antidades (base10), escritas en otras bases:
+Ejemplos de cantidades (base10), escritas en otras bases:
 
 | Cantidad  | Base_4 | Base_5 | Hexadecimal | Binario   |
 |-----------|--------|--------|-------------|-----------|
@@ -156,4 +156,4 @@ microbitml.py        ← Biblioteca compartida (va junto con main.py al micro:bi
 
 ---
 Licencia GPLv3   
-(c) 2026 - [Fundación Sadosky](https://fundacionsadosky.org.ar/)
+(C) 2026 [Fundación Sadosky](https://fundacionsadosky.org.ar/)

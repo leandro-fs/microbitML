@@ -7,7 +7,7 @@ description: Juego de la viborita en la matriz LED 5×5 del micro:bit
 
 Actividad para BBC micro:bit basada en la biblioteca [microbitML](https://github.com/leandro-fs/microbitML).
 
-Escrita originalmente en Python por el estudiante **Tomate Ruso** (13ra división), durante el [curso de Robótica](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica). Ejemplo de actividad donde el framework conecta dos micro:bits en modo adversario.
+Escrita originalmente en Python por el estudiante **Tomate Ruso**, durante el [curso de Robótica](https://www.cnba.uba.ar/novedades/inscripcion-al-curso-de-robotica). Ejemplo de actividad donde el framework conecta dos micro:bits en modo adversario.
 
 ---
 

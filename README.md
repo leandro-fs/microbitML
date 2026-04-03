@@ -32,23 +32,28 @@ Las actividades incluidas en este repositorio son **demostraciones de referencia
 
 La actividad más completa del repertorio. Integra los micro:bits con [ClassQuiz](https://classquiz.de/), una plataforma de quizzes interactivos de código abierto.
 
+
+![mbClassquiz|height:300](README.d/custom-microbit-classQuiz.svg)
+
 **Lo que la hace especial:**
-
-- El docente **crea cualquier quiz que desee** desde la interfaz web de ClassQuiz: preguntas de opción múltiple, verdadero/falso, respuesta abierta. **Sin programar nada**.
+ 
+- El docente crea **cualquier quiz** que desee desde la interfaz web de ClassQuiz: preguntas de opción múltiple, verdadero/falso, respuesta abierta. **Sin programar nada**.
+- Los estudiantes votan con los micro:bits físicamente (individual o grupalmente), y el docente ve los resultados en tiempo real en su navegador. 
 - ClassQuiz puede instalarse localmente en la PC del docente o en la red del colegio: **los quizzes funcionan con o sin conexión a Internet**.
-- Los estudiantes votan con los micro:bits físicamente (botones A/B para navegar y seleccionar), y el docente ve los resultados en tiempo real en su navegador.
 - Un micro:bit "concentrador" conectado por USB a la PC del docente actúa como gateway: recibe las respuestas de todos los estudiantes por radio y las envía a la aplicación de escritorio.
-- Aunque se puede votar desde cualquier dispositivo compatible con ClassQuiz.de, esta actividad bien puede ayudar a bajar la cantidad de celulares en el aula, que están siendo prohibidos en todo el mundo. 
+- Aunque se puede votar desde cualquier dispositivo compatible con [ClassQuiz.de](ClassQuiz.de), esta actividad bien puede ayudar a bajar la cantidad de celulares en el aula, que están siendo prohibidos en todo el mundo. 
 
-**Montaje mínimo:** 1 micro:bit concentrador (PC del docente) + 1 micro:bit por estudiante (hasta ~30).
-
-![Práctica en clase](README.d/practica_241029.png)
+**Montaje mínimo:** 1 micro:bit concentrador (conectada a la PC del docente) + 1 micro:bit por estudiante (hasta ~30).
 
 ---
 
 ### mbPerceptron — Inteligencia Artificial con micro:bits
 
 → [Documentación completa](mbPerceptron/README.md)
+
+
+![height:300](README.d/practica_241029.png)
+
 
 Tres micro:bits forman un **perceptrón distribuido**: varios actúan como entradas (dendritas, roles A, B, C, etc) y uno como salida (axón, rol Z). Sin decirles qué tienen entre manos, los estudiantes infieren por interacción directa, y debate, cuál es la operación matemática subyacente. Luego el docente introduce la jerga de Machine Learning (pesos, función de activación, clasificación, sesgo) sobre lo que los estudiantes ya descubrieron.
 
@@ -69,7 +74,7 @@ Varios micro:bits trabajan en conjunto como un único contador en base N (config
 
 → [Documentación completa](mbSnake/README.md)
 
-Clásico juego de la viborita en la matriz LED 5×5, escrito en Python para micro:bit por el estudiante Tomate Ruso (CNBA). Ejemplo de uso del framework con 2 dispositivos en modo adversario: la manzana cambia de lugar cuando el adversario sacude su micro:bit (como si sacudiera el manzano)
+Clásico juego de la viborita en la matriz LED 5×5, escrito en Python para micro:bit por el estudiante Tomate Ruso. Ejemplo de uso del framework con 2 dispositivos en modo adversario: la manzana cambia de lugar cuando el adversario sacude su micro:bit (como si sacudiera el manzano)
 
 ---
 
@@ -107,13 +112,13 @@ Al contribuir a este repositorio se asume aceptación de las licencias vigentes 
 
 Colaboradores/as iniciales, por orden alfabético:
 
-| Nombre                                                                                                           | Rol                           |
-|------------------------------------------------------------------------------------------------------------------|-------------------------------|
-| Alarcón Lasagno, Ramiro                                                                                          | Doc, SW                       |
-| Batlle, Leandro                                                                                                  | Doc, SW , idea original       |
-| Medel, Ricardo                                                                                                   | Licencias Doc, FLOSS, OSHW    |
-| Ruso, Tomate — CNBA 13ra                                                                                         | mbSnake (autor original)      |
-| Yamamoto, Fujio  | Inspiración para el framework |
+| Nombre                                                                                                           | Rol                            |
+|------------------------------------------------------------------------------------------------------------------|--------------------------------|
+| Alarcón Lasagno, Ramiro                                                                                          | Doc, SW                        |
+| Batlle, Leandro                                                                                                  | Doc, SW , idea original        |
+| Medel, Ricardo                                                                                                   | Licencias Doc, FLOSS, OSHW     |
+| Ruso, Tomate                                                                                         | mbSnake (autor original)       |
+| Yamamoto, Fujio  | Inspiración para el framework  |
 
 
 *¿Contribuiste al proyecto? Abrí un PR para agregar tu nombre y aportes.*

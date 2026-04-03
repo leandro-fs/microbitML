@@ -1,6 +1,6 @@
 # Snake
 
-por [Tomate Ruso](xxx@gmail), 13ra división  
+por Tomate Ruso
 
 
 

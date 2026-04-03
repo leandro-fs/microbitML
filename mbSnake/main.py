@@ -1,6 +1,6 @@
 #
 # **Snake**
-# derivado de [Tomate Ruso](xxx@gmail), 2do 13
+# derivado de Tomate Ruso
 # https://github.com/INFOCNBA/snake
 #
 # historial de versiones:

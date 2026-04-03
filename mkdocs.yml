@@ -63,6 +63,10 @@ nav:
     - Gmail SMTP: guias/smtp_gmail.md
     - Configuración de roles y grupos: guias/configuracion.md
     - Carga de firmware: guias/carga_firmware.md
+  - Contribuir:
+    - contributing/index.md
+    - Para redactores/as: contributing/for-writers.md
+    - Para desarrolladores/as: contributing/for-developers.md
 
 plugins:
   - search:

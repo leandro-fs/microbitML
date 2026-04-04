@@ -86,6 +86,7 @@ Clásico juego de la viborita en la matriz LED 5×5, escrito en Python para micr
 - **`ConfigManager`** — persistencia de la configuración en memoria flash (sobrevive a reinicios)
 
 La documentación completa de la API, con ejemplos de uso, está disponible en el sitio Properdocs/MkDocs del proyecto
+https://microbitML.readthedocs.org
 
 Para generar el sitio localmente:
 
@@ -101,7 +102,7 @@ properdocs serve -f mkdocs.yml
 Las contribuciones son bienvenidas, diferenciadas por perfil:
 
 - **Docentes:** nuevas actividades de aula, mejoras a la documentación pedagógica, reportes de uso real en clase
-- **Desarrolladores:** nuevas actividades de firmware, mejoras al framework `microbitml.py`, mejoras a la aplicación de escritorio
+- **Desarrolladores:** mejoras al framework `microbitml.py` y mejoras a la aplicación : `mbClassquiz/concentrador.py`, `mbClassquiz/Interface_grafica`
 
 Al contribuir a este repositorio se asume aceptación de las licencias vigentes (ver sección Licencias). Para proyectos de mayor escala se evaluará implementar un [Developer Certificate of Origin (DCO)](https://developercertificate.org/).
 
@@ -158,3 +159,11 @@ Este proyecto se distribuye sin garantía de ningún tipo, expresa o implícita.
 
 - (C) 2024 Leandro Batlle
 - (C) 2025–2026 Fundación Sadosky
+
+---
+
+<p align="center">
+  <a href="https://www.fundacionsadosky.org.ar">Fundación Sadosky</a> &nbsp;·&nbsp;
+<a href="https://program.ar">Iniciativa program.ar</a> &nbsp;·&nbsp;
+  <a href="https://www.microbit.org">micro:bit</a>
+</p>

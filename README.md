@@ -52,7 +52,7 @@ La actividad más completa del repertorio. Integra los micro:bits con [ClassQuiz
 → [Documentación completa](mbPerceptron/README.md)
 
 
-![height:300](README.d/practica_241029.png)
+![quiz tomado de https://classquiz.de/view/af8905ad-cb39-4b31-b1d9-ea71c08ddf7b|height:300](README.d/practica_241029.png)
 
 
 Tres micro:bits forman un **perceptrón distribuido**: varios actúan como entradas (dendritas, roles A, B, C, etc) y uno como salida (axón, rol Z). Sin decirles qué tienen entre manos, los estudiantes infieren por interacción directa, y debate, cuál es la operación matemática subyacente. Luego el docente introduce la jerga de Machine Learning (pesos, función de activación, clasificación, sesgo) sobre lo que los estudiantes ya descubrieron.
